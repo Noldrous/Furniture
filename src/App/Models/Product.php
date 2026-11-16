@@ -79,7 +79,8 @@ class Product
         $origin = $isCustomized ? 'Messenger customization' : 'Admin';
 
         return [
-            'id'                      => (string) ($input['id'] ?? ($isCustomized ? 'furn-cust-' : 'furn-std-') . time()),
+            'id'                      => (string) ($input['id'] ?? ($isCustomized ? 'furn-cust-' : 'furn-std-') . strtolower($sku)),
+            'productId'               => $sku,
             'sku'                     => $sku,
             'name'                    => $name,
             'image'                   => $image,

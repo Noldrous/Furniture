@@ -19,7 +19,9 @@ import {
   filterInventoryMaterials,
   findMatchingColorVariant,
   formatCustomerProductDisplay,
+  formatSimplifiedProductCardData,
   formatVoucherBenefitLabel,
+  generateOwnEntityId,
   getColorFilterCounts,
   getCompletedTransactionsForCustomer,
   getMaterialCategories,
@@ -133,6 +135,7 @@ const state = {
   vouchers: [],
   orders: [],
   selectedColorByProduct: {},
+  selectedMaterialByProduct: {},
   selectedCategory: 'recommended',
   searchQuery: '',
   sortBy: 'featured',
@@ -265,7 +268,8 @@ function bindLiveSearchInput(inputId, stateKey, onRender) {
 
 function bindStorefrontProductButtons(root = document) {
   root.querySelectorAll('[data-view-product]').forEach((btn) => {
-    btn.onclick = () => {
+    btn.onclick = (e) => {
+      e.preventDefault();
       const pid = btn.getAttribute('data-view-product');
       if (pid) openProductDetailModal(pid);
     };
@@ -830,6 +834,14 @@ function openProductDetailModal(productId) {
     product.defaultFinish;
   const display = formatCustomerProductDisplay(product, selectedFinish);
 
+  const availableMaterials = Array.isArray(state.materials) ? state.materials : [];
+  const defaultMatId = product.primaryMaterialId || availableMaterials[0]?.id || '';
+  const selectedMatId = state.selectedMaterialByProduct[product.id] || defaultMatId;
+  const selectedMaterialObj =
+    availableMaterials.find((m) => m.id === selectedMatId) ||
+    availableMaterials.find((m) => m.id === defaultMatId) ||
+    null;
+
   if (catHeader) {
     catHeader.textContent = display.categoryName;
   }
@@ -842,87 +854,135 @@ function openProductDetailModal(productId) {
 
   body.innerHTML = `
     <div class="grid grid-cols-1 md:grid-cols-12 gap-6 sm:gap-8 items-start">
-    <div class="md:col-span-6 space-y-3">
-    <div class="aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
-    <img src="${esc(display.image)}" alt="${esc(display.name)}" class="w-full h-full object-cover" />
-    </div>
-    <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 px-1">
-    <span>Dimensions: <strong class="text-[#0D1015]">${esc(display.dimensions)}</strong></span>
-    <span>Delivery: <strong class="text-[#0D1015]">Ships in ${display.leadTimeWeeks} ${display.leadTimeWeeks === 1 ? 'week' : 'weeks'}</strong></span>
-    </div>
-    </div>
-
-    <div class="md:col-span-6 space-y-5">
-    <div class="space-y-2">
-    <div class="flex flex-wrap items-center gap-2">
-    <span class="px-2.5 py-1 rounded-full text-xs font-semibold border ${statusBadgeClass}">
-              ${esc(display.availabilityLabel)}
-    </span>
-    <span class="text-xs text-slate-500">${esc(display.availabilityDetail)}</span>
-    </div>
-
-    <h2 id="product-modal-title" class="font-serif-display text-2xl sm:text-3xl font-bold text-[#0D1015] leading-snug">
-            ${esc(display.name)}
-    </h2>
-
-    <div class="flex items-baseline gap-2.5 pt-1">
-    <span class="font-mono-tech text-2xl sm:text-3xl font-bold text-[#0095FF]">
-              ${usd(display.effectivePrice)}
-    </span>
-            ${
-              display.hasDiscount
-                ? `<span class="font-mono-tech text-sm text-slate-400 line-through">${usd(display.variantBasePrice)}</span>
-    <span class="text-xs font-semibold text-emerald-700">Save ${display.discountPercent}%</span>`
-                : ''
-            }
-    </div>
-    </div>
-
-    <p class="text-sm text-slate-600 leading-relaxed">
-          ${esc(display.description)}
-    </p>
-
+      <div class="md:col-span-6 space-y-3">
+        <div class="aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
+          <img src="${esc(display.image)}" alt="${esc(display.name)}" class="w-full h-full object-cover" />
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 px-1">
+          <span>Dimensions: <strong class="text-[#0D1015]">${esc(display.dimensions)}</strong></span>
+          <span>Shipping: <strong class="text-[#0D1015]">Ships in ${display.leadTimeWeeks} ${display.leadTimeWeeks === 1 ? 'week' : 'weeks'}</strong></span>
+        </div>
         ${
           display.craftsmanshipNote
             ? `<div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
-    <strong class="text-[#0D1015]">Materials &amp; Care:</strong> ${esc(display.craftsmanshipNote)}
-    </div>`
+                <strong class="text-[#0D1015]">Craftsmanship &amp; Care:</strong> ${esc(display.craftsmanshipNote)}
+              </div>`
             : ''
         }
+      </div>
 
-    <div class="space-y-2">
-    <div class="flex items-center justify-between text-xs">
-    <span class="font-semibold text-[#0D1015]">Selected Finish: <span class="text-[#0077CC]">${esc(display.selectedFinish)}</span></span>
-    <span class="text-slate-500">
+      <div class="md:col-span-6 space-y-3.5">
+        <div class="space-y-1.5">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="px-2.5 py-1 rounded-full text-xs font-semibold border ${statusBadgeClass}">
+              ${esc(display.availabilityLabel)}
+            </span>
+            <span class="text-xs text-slate-500">${esc(display.availabilityDetail)}</span>
+          </div>
+
+          <h2 id="product-modal-title" class="font-serif-display text-2xl sm:text-3xl font-bold text-[#0D1015] leading-snug">
+            ${esc(display.name)}
+          </h2>
+
+          <div class="flex items-baseline gap-2.5 pt-0.5">
+            <span class="font-mono-tech text-2xl sm:text-3xl font-bold text-[#0095FF]">
+              ${usd(display.effectivePrice)}
+            </span>
+            ${
+              display.hasDiscount
+                ? `<span class="font-mono-tech text-sm text-slate-400 line-through">${usd(display.variantBasePrice)}</span>
+                   <span class="text-xs font-semibold text-emerald-700">Save ${display.discountPercent}%</span>`
+                : ''
+            }
+          </div>
+        </div>
+
+        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+          ${esc(display.description)}
+        </p>
+
+        <!-- Finish & Color Selection (Product Details Customization) -->
+        <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-[#0D1015]">Finish &amp; Color: <span class="text-[#0077CC]">${esc(display.selectedFinish)}</span></span>
+            <span class="font-mono-tech font-semibold text-slate-600 whitespace-nowrap">
               ${display.priceDelta === 0 ? 'Included' : display.priceDelta > 0 ? `+${usd(display.priceDelta)}` : `-${usd(Math.abs(display.priceDelta))}`}
-    </span>
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
+            </span>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
             ${display.colorVariants
               .map((v) => {
                 const isSel = v.name === display.selectedFinish;
+                const deltaText =
+                  v.priceDelta === 0
+                    ? 'Included'
+                    : v.priceDelta > 0
+                    ? `+${usd(v.priceDelta)}`
+                    : `-${usd(Math.abs(v.priceDelta))}`;
                 return `
-    <button type="button" data-modal-color-name="${esc(v.name)}" class="px-3 py-1.5 rounded-xl text-xs font-medium border flex items-center gap-2 cursor-pointer transition-all ${ isSel ? 'bg-[#0D1015] text-white border-[#0D1015]' : 'bg-white text-[#0D1015] border-slate-200 hover:border-[#0095FF]' }">
-    <span class="w-3.5 h-3.5 rounded-full border border-black/20 shrink-0" style="background-color: ${esc(v.hex)}"></span>
-    <span>${esc(v.shortLabel)}</span>
-    </button>
+                  <button
+                    type="button"
+                    data-modal-color-name="${esc(v.name)}"
+                    class="px-2.5 py-1.5 rounded-xl text-xs font-medium border inline-flex items-center gap-1.5 cursor-pointer transition-all ${
+                      isSel
+                        ? 'bg-[#0D1015] text-white border-[#0D1015] shadow-2xs'
+                        : 'bg-white text-[#0D1015] border-slate-200 hover:border-[#0095FF]'
+                    }"
+                  >
+                    <span class="w-3 h-3 rounded-full border border-black/20 shrink-0" style="background-color: ${esc(v.hex)}"></span>
+                    <span>${esc(v.name)}</span>
+                    <span class="text-[10px] opacity-80 font-mono-tech whitespace-nowrap">(${esc(deltaText)})</span>
+                  </button>
                 `;
               })
               .join('')}
-    </div>
-    </div>
+          </div>
+        </div>
 
-    <div class="pt-2 space-y-2.5">
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-    <button type="button" id="modal-add-to-cart-btn" ${display.isOutOfStock ? 'disabled' : ''} class="py-3 px-4 rounded-xl text-xs sm:text-sm font-semibold transition-colors ${ display.isOutOfStock ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-[#0095FF] hover:bg-[#0077CC] text-white cursor-pointer shadow-xs' }">
+        <!-- Material Selection (Product Details Customization) -->
+        ${
+          availableMaterials.length > 0
+            ? `<div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-semibold text-[#0D1015]">Workshop Material: <span class="text-[#0077CC]">${esc(selectedMaterialObj ? selectedMaterialObj.name : 'Solid Hardwood & Upholstery')}</span></span>
+                  <span class="text-[11px] text-slate-500">${esc(selectedMaterialObj ? selectedMaterialObj.category : 'Kiln-Dried Grade')}</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  ${availableMaterials
+                    .slice(0, 5)
+                    .map((mat) => {
+                      const isMatSel = mat.id === (selectedMaterialObj?.id || selectedMatId);
+                      return `
+                        <button
+                          type="button"
+                          data-modal-material-id="${esc(mat.id)}"
+                          class="px-2.5 py-1 rounded-lg text-[11px] font-medium border cursor-pointer transition-all ${
+                            isMatSel
+                              ? 'bg-[#0095FF] text-white border-[#0095FF]'
+                              : 'bg-white text-slate-700 border-slate-200 hover:border-[#0095FF]'
+                          }"
+                        >
+                          ${esc(mat.name)}
+                        </button>
+                      `;
+                    })
+                    .join('')}
+                </div>
+              </div>`
+            : ''
+        }
+
+        <div class="pt-1 space-y-2">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <button type="button" id="modal-add-to-cart-btn" ${display.isOutOfStock ? 'disabled' : ''} class="py-3 px-4 rounded-xl text-xs sm:text-sm font-semibold transition-colors ${ display.isOutOfStock ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-[#0095FF] hover:bg-[#0077CC] text-white cursor-pointer shadow-xs' }">
               ${display.isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
-    </button>
-    <button type="button" id="modal-make-offer-btn" data-testid="modal-make-offer-btn" class="py-3 px-4 rounded-xl bg-[#0D1015] hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer text-center">
+            </button>
+            <button type="button" id="modal-make-offer-btn" data-testid="modal-make-offer-btn" class="py-3 px-4 rounded-xl bg-[#0D1015] hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer text-center">
               Make Offer
-    </button>
-    </div>
-    </div>
-    </div>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -935,6 +995,16 @@ function openProductDetailModal(productId) {
         if (document.getElementById('catalog-page-grid')) {
           renderCatalogPage();
         }
+        openProductDetailModal(product.id);
+      }
+    });
+  });
+
+  body.querySelectorAll('[data-modal-material-id]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mid = btn.getAttribute('data-modal-material-id');
+      if (mid) {
+        state.selectedMaterialByProduct[product.id] = mid;
         openProductDetailModal(product.id);
       }
     });
@@ -1600,126 +1670,115 @@ function renderCatalogGrid() {
   }
 
   grid.innerHTML = displayed
-    .map((item) => {
-      const selectedFinish =
-        state.selectedColorByProduct[item.id] ||
-        item.colorVariants?.[0]?.name ||
-        item.defaultFinish;
-      const display = formatCustomerProductDisplay(item, selectedFinish);
-      const productPageUrl = `catalog.html?category=${encodeURIComponent(item.categoryId)}&product=${encodeURIComponent(item.id)}`;
-
-      const stockBadgeClass = display.isOutOfStock
-        ? 'bg-rose-600 text-white'
-        : display.isLowStock
-        ? 'bg-amber-500 text-slate-950'
-        : 'bg-white/95 text-[#0D1015] border border-slate-200/80';
-
-      return `
-    <article class="group rounded-2xl bg-white border border-[#BCE3FF] hover:border-[#0095FF] overflow-hidden shadow-2xs hover:shadow-xl transition-all flex flex-col justify-between">
-    <div>
-    <a href="${esc(productPageUrl)}" data-testid="home-product-card-link-${esc(item.id)}" class="block aspect-[4/3] relative overflow-hidden bg-slate-100">
-    <img src="${esc(display.image)}" alt="${esc(display.name)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-    <div class="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-1.5">
-    <div class="flex flex-wrap gap-1.5">
-                  ${
-                    item.isBestSeller
-                      ? `<span class="px-2.5 py-1 rounded-md bg-[#0095FF] text-white font-mono-tech text-[11px] font-bold">${esc(item.bestSellerBadge || 'Best Seller')}</span>`
-                      : ''
-                  }
-    <span data-testid="shop-stock-badge-${esc(item.id)}" class="px-2.5 py-1 rounded-md text-[11px] font-semibold shadow-2xs ${stockBadgeClass}">
-                    ${esc(display.availabilityLabel)}
-    </span>
-    </div>
-                ${
-                  display.hasDiscount
-                    ? `<span class="px-2.5 py-1 rounded-md bg-[#0D1015] text-white font-mono-tech text-[11px] font-bold">Save ${display.discountPercent}%</span>`
-                    : ''
-                }
-    </div>
-    <div class="absolute bottom-3 left-3">
-    <span class="px-2.5 py-1 rounded-md bg-white/95 text-[#0D1015] font-mono-tech text-[11px] font-semibold">
-                  ${esc(item.sku)} · ${esc(display.categoryName)}
-    </span>
-    </div>
-    </a>
-
-    <div class="p-5 space-y-3">
-    <div class="flex items-start justify-between gap-3">
-    <a href="${esc(productPageUrl)}" class="font-serif-display text-lg font-bold text-[#0D1015] hover:text-[#0095FF] leading-snug transition-colors">
-                  ${esc(display.name)}
-    </a>
-    <div class="text-right shrink-0">
-                  ${
-                    display.hasDiscount
-                      ? `<p class="font-mono-tech text-xs text-slate-400 line-through">${usd(display.variantBasePrice)}</p>`
-                      : ''
-                  }
-    <p class="font-mono-tech text-xl font-bold text-[#0095FF]">${usd(display.effectivePrice)}</p>
-    </div>
-    </div>
-
-    <p class="text-xs text-[#475569] leading-relaxed line-clamp-2">${esc(display.description)}</p>
-
-    <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/90 space-y-2">
-    <div class="flex items-center justify-between text-[11px]">
-    <span class="font-medium text-slate-700">Finish: <strong class="text-[#0D1015]">${esc(display.selectedFinish)}</strong></span>
-    <span class="text-slate-500 font-medium">
-                    ${display.priceDelta === 0 ? 'Included' : display.priceDelta > 0 ? `+${usd(display.priceDelta)}` : `-${usd(Math.abs(display.priceDelta))}`}
-    </span>
-    </div>
-    <div class="flex flex-wrap items-center gap-1.5">
-                  ${display.colorVariants
-                    .map((v) => {
-                      const isSel = v.name === display.selectedFinish;
-                      return `
-    <button type="button" data-color-product="${esc(item.id)}" data-color-name="${esc(v.name)}" class="px-2.5 py-1 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 cursor-pointer transition-all ${ isSel ? 'bg-[#0D1015] text-white border-[#0D1015]' : 'bg-white text-slate-700 border-slate-200 hover:border-[#0095FF]' }">
-    <span class="w-3 h-3 rounded-full border border-black/20 shrink-0" style="background-color: ${esc(v.hex)}"></span>
-    <span class="truncate max-w-[115px]">${esc(v.shortLabel)}</span>
-    </button>
-                      `;
-                    })
-                    .join('')}
-    </div>
-    </div>
-
-    <div class="pt-1 flex items-center justify-between text-[11px] text-[#64748B] font-mono-tech">
-    <span>${esc(display.dimensions)}</span>
-    <span>${esc(display.availabilityDetail)}</span>
-    </div>
-    </div>
-    </div>
-
-    <div class="px-5 pb-5 pt-2 space-y-2">
-    <a href="${esc(productPageUrl)}" data-testid="home-product-open-catalog-${esc(item.id)}" class="block w-full py-2.5 px-3 rounded-xl bg-[#0D1015] hover:bg-[#0095FF] text-white text-xs font-semibold transition-colors text-center">
-              View in Catalog &amp; Filter by Color →
-    </a>
-    <div class="grid grid-cols-2 gap-2">
-    <button type="button" data-add-cart="${esc(item.id)}" ${display.isOutOfStock ? 'disabled' : ''} class="py-2.5 px-3 rounded-xl text-xs font-semibold transition-colors ${ display.isOutOfStock ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-[#0095FF] hover:bg-[#0077CC] text-white cursor-pointer' }">
-                ${display.isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
-    </button>
-    <button type="button" data-view-product="${esc(item.id)}" aria-label="View details for ${esc(display.name)}" class="py-2.5 px-3 rounded-xl bg-[#D8EEFF] hover:bg-[#BCE3FF] text-[#0D1015] text-xs font-semibold transition-colors cursor-pointer">
-                View Details
-    </button>
-    </div>
-    </div>
-    </article>
-      `;
-    })
+    .map((item) => renderSimplifiedProductCard(item, { cardTestId: `home-product-card-${item.id}` }))
     .join('');
 
-  // Bind color swatch buttons
-  grid.querySelectorAll('[data-color-product]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const pid = btn.getAttribute('data-color-product');
-      const cname = btn.getAttribute('data-color-name');
-      if (pid && cname) {
-        state.selectedColorByProduct[pid] = cname;
-        renderCatalogGrid();
-      }
-    });
-  });
-
   bindStorefrontProductButtons(grid);
+}
+
+function renderSimplifiedProductCard(item, options = {}) {
+  const selectedFinish =
+    state.selectedColorByProduct[item.id] ||
+    item.colorVariants?.[0]?.name ||
+    item.defaultFinish;
+  const card = formatSimplifiedProductCardData(item, selectedFinish);
+  const isSpotlighted = Boolean(options.isSpotlighted);
+  const cardTestId = options.cardTestId || `product-card-${card.id}`;
+
+  const stockBadgeClass = card.isOutOfStock
+    ? 'bg-rose-600 text-white'
+    : card.isLowStock
+    ? 'bg-amber-500 text-slate-950'
+    : 'bg-white/95 text-[#0D1015] border border-slate-200/80';
+
+  return `
+    <article
+      data-testid="${esc(cardTestId)}"
+      class="group h-full rounded-2xl bg-white border ${
+        isSpotlighted
+          ? 'border-[#0095FF] ring-2 ring-[#0095FF]/20'
+          : 'border-slate-200 hover:border-[#0095FF]'
+      } overflow-hidden shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between"
+    >
+      <div class="flex flex-col flex-1">
+        <div
+          data-view-product="${esc(card.id)}"
+          data-testid="home-product-card-link-${esc(card.id)}"
+          role="button"
+          tabindex="0"
+          aria-label="View ${esc(card.name)}"
+          class="block aspect-[4/3] relative overflow-hidden bg-slate-100 cursor-pointer shrink-0"
+        >
+          <img
+            src="${esc(card.image)}"
+            alt="${esc(card.name)}"
+            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
+          <div class="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-1.5">
+            <span
+              data-testid="shop-stock-badge-${esc(card.id)}"
+              class="px-2.5 py-1 rounded-md text-[11px] font-semibold shadow-2xs ${stockBadgeClass}"
+            >
+              ${esc(card.availabilityLabel)}
+            </span>
+            ${
+              card.hasDiscount
+                ? `<span class="px-2.5 py-1 rounded-md bg-[#0D1015] text-white font-mono-tech text-[11px] font-bold">Save ${card.discountPercent}%</span>`
+                : ''
+            }
+          </div>
+        </div>
+
+        <div class="p-5 flex flex-col flex-1 justify-between gap-3.5">
+          <div class="space-y-2">
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-[#0095FF]">
+              ${esc(card.categoryName)}
+            </p>
+
+            <div class="flex items-start justify-between gap-3">
+              <h3
+                data-view-product="${esc(card.id)}"
+                class="font-serif-display text-lg font-bold text-[#0D1015] group-hover:text-[#0095FF] leading-snug transition-colors cursor-pointer line-clamp-2 min-h-[2.75rem]"
+                title="${esc(card.name)}"
+              >
+                ${esc(card.name)}
+              </h3>
+              <div class="text-right shrink-0">
+                ${
+                  card.hasDiscount && card.originalPrice !== null
+                    ? `<p class="font-mono-tech text-xs text-slate-400 line-through leading-none mb-0.5">${usd(card.originalPrice)}</p>`
+                    : ''
+                }
+                <p class="font-mono-tech text-lg sm:text-xl font-bold text-[#0095FF] leading-none">
+                  ${usd(card.sellingPrice)}
+                </p>
+              </div>
+            </div>
+
+            <p class="text-xs text-[#475569] leading-relaxed line-clamp-2 min-h-[2.5rem]">
+              ${esc(card.description)}
+            </p>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px] text-[#64748B] font-mono-tech">
+            <span class="truncate" title="${esc(card.dimensions)}">${esc(card.dimensions)}</span>
+            <span class="shrink-0">${esc(card.shippingTimeLabel)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 pb-5 pt-0 mt-auto">
+        <button
+          type="button"
+          data-view-product="${esc(card.id)}"
+          data-testid="view-product-btn-${esc(card.id)}"
+          class="w-full py-2.5 px-4 rounded-xl bg-[#0D1015] hover:bg-[#0095FF] text-white text-xs font-semibold transition-colors cursor-pointer text-center shadow-2xs"
+        >
+          ${esc(card.ctaLabel)}
+        </button>
+      </div>
+    </article>
+  `;
 }
 
 function renderCartDrawer(stockWarningMessage = '') {
@@ -2608,8 +2667,8 @@ function initDashboardPage() {
     const minStockEl = document.getElementById('prod-min-stock');
     const colEl = document.getElementById('prod-colors');
     if (nameEl) nameEl.value = '';
-    if (skuEl) skuEl.value = '';
-    if (catEl) catEl.value = 'dining';
+    if (catEl) catEl.value = 'living';
+    if (skuEl) skuEl.value = generateOwnEntityId('product', '', catEl ? catEl.value : 'living').codeId;
     if (priceEl) priceEl.value = '2850';
     if (discEl) discEl.value = '0';
     if (dimEl) dimEl.value = '240cm L × 100cm W × 75cm H';
@@ -2677,6 +2736,20 @@ function initDashboardPage() {
   if (prodTypeSelect) {
     prodTypeSelect.addEventListener('change', () => {
       syncProductFormTypeUI();
+    });
+  }
+
+  const prodCatSelect = document.getElementById('prod-category');
+  if (prodCatSelect) {
+    prodCatSelect.addEventListener('change', () => {
+      const isEditing = Boolean(prodEditIdInput && prodEditIdInput.value);
+      if (isEditing) return;
+      const skuEl = document.getElementById('prod-sku');
+      if (!skuEl) return;
+      const currentSku = skuEl.value.trim().toUpperCase();
+      if (!currentSku || /^LR-[A-Z]{2,3}-\d{3}$/.test(currentSku)) {
+        skuEl.value = generateOwnEntityId('product', '', prodCatSelect.value).codeId;
+      }
     });
   }
 
@@ -3003,14 +3076,16 @@ function initDashboardPage() {
           : Math.min(prod.effectivePrice, Math.round(rawDiscountVal));
 
       const normalizedEmail = customerEmail || 'rowena.vance@vancearchitects.com';
+      const generatedVoucherId = generateOwnEntityId('voucher', code).codeId;
 
       const newVoucher = {
-        id: `vch-${Date.now()}`,
+        id: `vch-${generatedVoucherId.toLowerCase()}`,
+        voucherId: generatedVoucherId,
         code,
         customerEmail: normalizedEmail,
         customerName: normalizedEmail.split('@')[0],
         furnitureId: prod.id,
-        productId: prod.id,
+        productId: prod.productId || prod.id,
         furnitureSku: prod.sku,
         furnitureName: prod.name,
         productName: prod.name,
@@ -3208,44 +3283,41 @@ function renderDashboardContent() {
     const featuredItems = state.catalog.slice(0, 6);
     homeCatalogFeedEl.innerHTML = featuredItems
       .map((prod) => {
-        const imgUrl = (prod.image || 'assets/images/category_dining_tables.jpg').replace(/^\//, '');
-        const st = getProductStockStatus(prod);
-        const isDiscounted = Number(prod.discountPercent || 0) > 0;
+        const card = formatSimplifiedProductCardData(prod);
+        const imgUrl = (card.image || 'assets/images/category_dining_tables.jpg').replace(/^\//, '');
         return `
-    <div class="p-4 rounded-2xl border border-[#BCE3FF] bg-[#F8FBFF] flex flex-col justify-between gap-3">
+    <div class="p-4 rounded-2xl border border-[#BCE3FF] bg-[#F8FBFF] flex flex-col justify-between gap-3 h-full">
     <div class="flex items-start gap-3.5">
-    <img src="${esc(imgUrl)}" alt="${esc(prod.name)}" class="w-16 h-16 rounded-xl object-cover border border-[#BCE3FF] shrink-0" />
+    <img src="${esc(imgUrl)}" alt="${esc(card.name)}" class="w-16 h-16 rounded-xl object-cover border border-[#BCE3FF] shrink-0" />
     <div class="min-w-0 flex-1">
     <div class="flex items-center justify-between gap-1">
-    <span class="font-mono-tech text-[11px] font-bold text-[#0077CC]">${esc(prod.sku)}</span>
+    <span class="text-[11px] font-semibold uppercase tracking-wider text-[#0077CC]">${esc(card.categoryName)}</span>
     <span class="text-[11px] font-mono-tech font-semibold ${
-                    st.statusKey === 'out_of_stock'
+                    card.isOutOfStock
                       ? 'text-rose-700'
-                      : st.statusKey === 'low_stock'
+                      : card.isLowStock
                       ? 'text-amber-700'
                       : 'text-emerald-700'
-                  }">${st.availableStock} in stock</span>
+                  }">${esc(card.availabilityLabel)}</span>
     </div>
-    <h3 class="font-serif-display text-sm font-bold text-[#0D1015] truncate mt-0.5">${esc(prod.name)}</h3>
-    <p class="text-[11px] text-[#64748B] truncate">${esc(prod.dimensions || 'Standard Dimensions')}</p>
+    <h3 class="font-serif-display text-sm font-bold text-[#0D1015] truncate mt-0.5">${esc(card.name)}</h3>
+    <p class="text-[11px] text-[#475569] line-clamp-2 mt-0.5">${esc(card.description)}</p>
+    <p class="text-[11px] text-[#64748B] font-mono-tech truncate mt-1">${esc(card.dimensions)} · ${esc(card.shippingTimeLabel)}</p>
     <div class="flex items-baseline gap-2 mt-1">
-    <span class="font-mono-tech text-sm font-bold text-[#0095FF]">${usd(prod.effectivePrice)}</span>
+    <span class="font-mono-tech text-sm font-bold text-[#0095FF]">${usd(card.sellingPrice)}</span>
                   ${
-                    isDiscounted
-                      ? `<span class="font-mono-tech text-[11px] text-slate-400 line-through">${usd(prod.price)}</span>
-    <span class="text-[10px] font-bold text-emerald-700">${prod.discountPercent}% OFF</span>`
+                    card.hasDiscount && card.originalPrice !== null
+                      ? `<span class="font-mono-tech text-[11px] text-slate-400 line-through">${usd(card.originalPrice)}</span>
+    <span class="text-[10px] font-bold text-emerald-700">Save ${card.discountPercent}%</span>`
                       : ''
                   }
     </div>
     </div>
     </div>
-    <div class="flex items-center gap-2 pt-2 border-t border-[#E2E8F0]">
-    <button type="button" data-client-quick-add="${esc(prod.id)}" ${st.availableStock <= 0 ? 'disabled' : ''} class="flex-1 px-3 py-1.5 rounded-xl bg-[#0095FF] hover:bg-[#0077CC] text-white text-xs font-semibold transition-colors cursor-pointer ${ st.availableStock <= 0 ? 'opacity-50 cursor-not-allowed' : '' }">
-                ${st.availableStock <= 0 ? 'Out of Stock' : '+ Add to Cart'}
-    </button>
-    <button type="button" data-client-customize-prod="${esc(prod.id)}" class="px-3 py-1.5 rounded-xl border border-[#BCE3FF] bg-white hover:bg-[#EBF6FF] text-[#0077CC] text-xs font-semibold transition-colors cursor-pointer">
-                Customize
-    </button>
+    <div class="flex items-center gap-2 pt-2 border-t border-[#E2E8F0] mt-auto">
+    <a href="catalog.html?category=${encodeURIComponent(prod.categoryId || 'all')}&product=${encodeURIComponent(card.id)}" class="flex-1 px-3 py-2 rounded-xl bg-[#0D1015] hover:bg-[#0095FF] text-white text-xs font-semibold transition-colors cursor-pointer text-center">
+                ${esc(card.ctaLabel)}
+    </a>
     </div>
     </div>
         `;
@@ -4396,7 +4468,7 @@ function renderDashboardContent() {
                                     : ''
                                 }
                               </div>
-                              <p class="admin-table-sub font-mono-tech">${esc(p.sku)} · ${esc(p.dimensions || 'Standard')}</p>
+                              <p class="admin-table-sub font-mono-tech">ProductID: ${esc(p.productId || p.sku)} · ${esc(p.dimensions || 'Standard')}</p>
                             </div>
                           </div>
                         </td>
@@ -4809,7 +4881,7 @@ function renderDashboardContent() {
                         <tr data-material-row="${esc(m.id)}">
                           <td class="admin-col-primary">
                             <p class="admin-table-title">${esc(m.name)}</p>
-                            <p class="admin-table-sub font-mono-tech">${esc(m.sku)}</p>
+                            <p class="admin-table-sub font-mono-tech">MaterialID: ${esc(m.materialId || m.sku || m.code)}</p>
                           </td>
                           <td class="whitespace-nowrap">
                             <span class="admin-category-tag">${esc(m.materialType)}</span>
@@ -5809,7 +5881,10 @@ function renderDashboardContent() {
                       : `-${usd(v.discountAmount)}`;
                     return `
                       <tr>
-                        <td class="font-mono-tech text-xs font-bold text-slate-900 whitespace-nowrap">${esc(v.code)}</td>
+                        <td class="font-mono-tech text-xs font-bold text-slate-900 whitespace-nowrap">
+                          <p>${esc(v.code)}</p>
+                          <p class="admin-table-sub font-mono-tech">VoucherID: ${esc(v.voucherId || v.code || v.id)}</p>
+                        </td>
                         <td class="text-xs text-slate-600 whitespace-nowrap">${esc(v.customerEmail)}</td>
                         <td class="admin-col-primary">
                           <p class="admin-table-title">${esc(v.furnitureName || v.productName)}</p>
@@ -5935,7 +6010,7 @@ function renderDashboardContent() {
           <div class="px-6 py-4 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 class="text-sm font-bold text-slate-900">Active Orders (${filteredActiveOrders.length})</h3>
-              <p class="text-xs text-slate-500">Update workshop stages or mark an order as Complete to move it to Completed Orders and record it in the customer's Transactions.</p>
+              <p class="text-xs text-slate-500">Select the workshop stage in Order Stage (including "Delivered · Completed") to update progress or move the order to Completed Orders and the customer's Transactions.</p>
             </div>
             <span class="px-2.5 py-1 rounded-full bg-sky-50 text-[#0077CC] border border-sky-200 font-mono-tech text-xs font-bold">
               ${activeOrders.length} Active
@@ -6005,9 +6080,7 @@ function renderDashboardContent() {
                     <th>Customer</th>
                     <th class="admin-col-primary">Product &amp; Finish</th>
                     <th>Order Stage</th>
-                    <th>Payment Status</th>
                     <th class="text-right">Total Amount</th>
-                    <th class="text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -6015,9 +6088,8 @@ function renderDashboardContent() {
                     .map((o) => {
                       const realIdx = state.orders.findIndex((item) => item.orderNumber === o.orderNumber);
                       const totalAmt = Number(o.totalAmount || 0);
-                      const paidAmt = Number(o.depositPaid ?? totalAmt);
-                      const balanceDue = Math.max(0, totalAmt - paidAmt);
                       const isCancelled = /Cancelled/i.test(String(o.status || '')) || o.sqlStatus === 'Cancelled';
+                      const explicitOrderId = o.orderId || o.orderNumber || o.id;
                       return `
                         <tr data-testid="admin-active-order-row-${esc(o.orderNumber)}">
                           <td class="whitespace-nowrap">
@@ -6029,7 +6101,7 @@ function renderDashboardContent() {
                                   : ''
                               }
                             </div>
-                            <p class="admin-table-sub mt-0.5">${esc(o.orderDate || '2026-10-28')}</p>
+                            <p class="admin-table-sub font-mono-tech mt-0.5">OrderID: ${esc(explicitOrderId)} · ${esc(o.orderDate || '2026-10-28')}</p>
                           </td>
                           <td class="whitespace-nowrap">
                             <p class="admin-table-title">${esc(o.clientName)}</p>
@@ -6089,32 +6161,8 @@ function renderDashboardContent() {
                                 : ''
                             }
                           </td>
-                          <td class="whitespace-nowrap">
-                            <span class="admin-status-badge ${balanceDue > 0 ? 'admin-status-low-stock' : 'admin-status-in-stock'}">
-                              <span class="admin-status-badge-dot"></span>${balanceDue > 0 ? '50% Deposit Paid' : 'Paid in Full'}
-                            </span>
-                          </td>
                           <td class="text-right whitespace-nowrap">
                             <p class="font-mono-tech text-sm font-bold text-slate-900">${usd(totalAmt)}</p>
-                            ${
-                              balanceDue > 0
-                                ? `<p class="text-[11px] text-slate-500 font-mono-tech">Bal: ${usd(balanceDue)}</p>`
-                                : ''
-                            }
-                          </td>
-                          <td class="text-right whitespace-nowrap">
-                            ${
-                              isCancelled
-                                ? `<span class="text-xs text-slate-400">Cancelled</span>`
-                                : `<button
-                                    type="button"
-                                    data-admin-complete-order="${esc(o.orderNumber)}"
-                                    data-testid="admin-complete-order-btn-${esc(o.orderNumber)}"
-                                    class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                                  >
-                                    ✓ Complete Order
-                                  </button>`
-                            }
                           </td>
                         </tr>
                       `;
@@ -6138,7 +6186,7 @@ function renderDashboardContent() {
                 </span>
               </div>
               <p class="text-xs text-slate-600 mt-0.5">
-                Orders marked as Complete appear in this section and are automatically added to the customer's Transaction Orders ledger.
+                Orders set to "Delivered · Completed" in Order Stage appear in this section and are automatically added to the customer's Transaction Orders ledger.
               </p>
             </div>
             <span id="admin-completed-section-badge" class="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-mono-tech text-xs font-bold">
@@ -6152,7 +6200,7 @@ function renderDashboardContent() {
             <div class="admin-empty-state space-y-2 py-8">
               <p class="text-sm font-bold text-slate-900">No completed orders yet</p>
               <p class="text-xs text-slate-500 max-w-md mx-auto">
-                Click "✓ Complete Order" or select "Delivered · Completed" on any active order above to move it here and add it to the customer's Transaction Orders.
+                Select "Delivered · Completed" in the Order Stage dropdown on any active order above to move it here and add it to the customer's Transaction Orders.
               </p>
             </div>
           `
@@ -6175,12 +6223,14 @@ function renderDashboardContent() {
                     .map((o) => {
                       const totalAmt = Number(o.totalAmount || 0);
                       const ordDigits = String(o.orderNumber || '').split('-').pop() || '0000';
+                      const explicitOrderId = o.orderId || o.orderNumber || ordDigits;
                       const txRef = o.transactionReference || `TXN-2026-${ordDigits}`;
                       const completedDate = o.completedAt || o.orderDate || '2026-10-28';
                       return `
                         <tr data-testid="admin-completed-order-row-${esc(o.orderNumber)}">
                           <td class="whitespace-nowrap">
                             <p class="font-mono-tech text-xs font-bold text-[#0095FF]">#${esc(o.orderNumber)}</p>
+                            <p class="admin-table-sub font-mono-tech mt-0.5">OrderID: ${esc(explicitOrderId)}</p>
                           </td>
                           <td class="whitespace-nowrap">
                             <span class="font-mono-tech text-xs font-bold text-slate-900">${esc(txRef)}</span>
@@ -6205,7 +6255,6 @@ function renderDashboardContent() {
                           </td>
                           <td class="text-right whitespace-nowrap">
                             <p class="font-mono-tech text-sm font-bold text-emerald-700">${usd(totalAmt)}</p>
-                            <p class="text-[11px] text-emerald-600 font-mono-tech">Paid in Full</p>
                           </td>
                         </tr>
                       `;
@@ -6270,15 +6319,6 @@ function renderDashboardContent() {
         },
       });
     };
-
-    adminOrdersEl.querySelectorAll('[data-admin-complete-order]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const orderNumber = btn.getAttribute('data-admin-complete-order') || '';
-        const ord = state.orders.find((item) => item.orderNumber === orderNumber);
-        if (!ord) return;
-        handleCompleteOrderWithConfirm(ord);
-      });
-    });
 
     adminOrdersEl.querySelectorAll('[data-admin-order-idx]').forEach((sel) => {
       sel.addEventListener('change', (e) => {
@@ -6449,7 +6489,7 @@ function renderDashboardContent() {
                             </div>
                             <div>
                               <p class="admin-table-title">${esc(c.name)}</p>
-                              <p class="admin-table-sub">Last order: ${esc(c.lastOrderDate)}</p>
+                              <p class="admin-table-sub font-mono-tech">CustomerID: ${esc(c.customerId || c.id)} · Last order: ${esc(c.lastOrderDate)}</p>
                             </div>
                           </div>
                         </td>
@@ -6673,6 +6713,9 @@ function initCatalogPage() {
   bindCartDrawerAndVoucher();
   renderCatalogPage();
   renderCartDrawer();
+  if (state.catalogPageSpotlightProductId) {
+    openProductDetailModal(state.catalogPageSpotlightProductId);
+  }
 }
 
 function renderCatalogPage() {
@@ -6851,10 +6894,10 @@ function renderCatalogPage() {
     <div class="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-[#BCE3FF]">
     <div class="flex items-center gap-2">
     <span class="px-2.5 py-1 rounded-md bg-[#0095FF] text-white font-mono-tech text-[11px] font-bold">
-                Selected from Homepage
+                Product Details &amp; Customization
     </span>
     <span class="font-mono-tech text-xs text-[#475569]">
-                ${esc(spotlightItem.sku)} · ${esc(spotlightItem.categoryName)}
+                ${esc(spotlightItem.categoryName)}
     </span>
     </div>
     <button type="button" id="catalog-close-spotlight-btn" class="text-xs font-semibold text-[#475569] hover:text-[#0D1015] cursor-pointer">
@@ -6997,92 +7040,13 @@ function renderCatalogPage() {
           state.selectedColorByProduct[item.id] = matchedVariant.name;
         }
       }
-      const selectedFinish =
-        state.selectedColorByProduct[item.id] || item.colorVariants?.[0]?.name || item.defaultFinish;
-      const display = formatCustomerProductDisplay(item, selectedFinish);
-      const variants = item.colorVariants || [];
       const isSpotlighted = state.catalogPageSpotlightProductId === item.id;
-
-      return `
-    <article data-testid="catalog-product-card-${esc(item.id)}" class="group rounded-2xl bg-white border ${ isSpotlighted ? 'border-[#0095FF] ring-2' : 'border-[#E2E8F0] hover:border-[#0095FF]' } overflow-hidden shadow-2xs hover:shadow-xl transition-all flex flex-col justify-between">
-    <div>
-    <div class="aspect-[4/3] relative overflow-hidden bg-slate-100">
-    <img src="${esc(display.image)}" alt="${esc(display.name)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-    <div class="absolute top-3 left-3 flex flex-wrap gap-1.5">
-    <span class="px-2.5 py-1 rounded-md bg-white/95 text-[#0D1015] font-mono-tech text-[10px] font-bold uppercase tracking-wider shadow-2xs">
-                  ${esc(display.categoryName)}
-    </span>
-                ${
-                  matchedColorDef
-                    ? `<span class="px-2.5 py-1 rounded-md bg-[#0095FF] text-white font-mono-tech text-[10px] font-bold uppercase tracking-wider">
-                        ✓ ${esc(matchedColorDef.label)}
-    </span>`
-                    : ''
-                }
-    </div>
-    <div class="absolute bottom-3 right-3">
-    <span class="px-2.5 py-1 rounded-md bg-[#0D1015]/90 text-white font-mono-tech text-xs font-bold">
-                  ${usd(display.effectivePrice)}
-    </span>
-    </div>
-    </div>
-
-    <div class="p-5 space-y-3">
-    <div class="text-center border-b border-[#E2E8F0] pb-3">
-    <h3 class="font-serif-display text-base sm:text-lg font-bold text-[#0D1015] uppercase tracking-wide leading-snug">
-                  ${esc(display.name)}
-    </h3>
-    <p class="font-mono-tech text-[11px] text-[#64748B] uppercase tracking-widest mt-0.5">
-                  ${variants.length} COLOR FINISHES · ${esc(display.selectedFinish)}
-    </p>
-    </div>
-
-    <div class="space-y-1.5">
-    <div class="flex items-center justify-between text-[11px]">
-    <span class="font-semibold text-[#0D1015] truncate">Finish: <span class="text-[#0077CC]">${esc(display.selectedFinish)}</span></span>
-    <span class="font-mono-tech font-bold text-[#0095FF] shrink-0">${usd(display.effectivePrice)}</span>
-    </div>
-    <div class="flex flex-wrap items-center gap-1.5">
-                  ${variants
-                    .map((v) => {
-                      const isSel = v.name === display.selectedFinish;
-                      return `
-    <button type="button" data-catalog-card-color-product="${esc(item.id)}" data-catalog-card-color-name="${esc(v.name)}" class="px-2 py-1 rounded-md text-[11px] font-medium border flex items-center gap-1.5 cursor-pointer transition-all ${ isSel ? 'bg-[#0D1015] text-white border-[#0D1015]' : 'bg-[#F8FBFF] text-[#0D1015] border-[#BCE3FF] hover:border-[#0095FF]' }">
-    <span class="w-3 h-3 rounded-full border border-black/20 shrink-0" style="background-color: ${esc(v.hex)}"></span>
-    <span class="truncate max-w-[115px]">${esc(v.name.split('/')[0].trim())}</span>
-    </button>
-                      `;
-                    })
-                    .join('')}
-    </div>
-    </div>
-    </div>
-    </div>
-
-    <div class="px-5 pb-5 pt-1 grid grid-cols-2 gap-2">
-    <button type="button" data-add-cart="${esc(item.id)}" ${display.isOutOfStock ? 'disabled' : ''} class="py-2.5 px-3 rounded-xl text-xs font-semibold transition-colors ${ display.isOutOfStock ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-[#0095FF] hover:bg-[#0077CC] text-white cursor-pointer' }">
-              ${display.isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
-    </button>
-    <button type="button" data-view-product="${esc(item.id)}" class="py-2.5 px-3 rounded-xl bg-[#F0F8FF] hover:bg-[#D8EEFF] text-[#0D1015] border border-[#BCE3FF] text-xs font-semibold transition-colors cursor-pointer text-center">
-              View Details
-    </button>
-    </div>
-    </article>
-      `;
+      return renderSimplifiedProductCard(item, {
+        isSpotlighted,
+        cardTestId: `catalog-product-card-${item.id}`,
+      });
     })
     .join('');
-
-  // Bind card color swatches
-  grid.querySelectorAll('[data-catalog-card-color-product]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const pid = btn.getAttribute('data-catalog-card-color-product');
-      const cname = btn.getAttribute('data-catalog-card-color-name');
-      if (pid && cname) {
-        state.selectedColorByProduct[pid] = cname;
-        renderCatalogPage();
-      }
-    });
-  });
 
   bindStorefrontProductButtons(document);
 }

@@ -74,17 +74,17 @@ class Database
         }
         $ddlStatements = [
             "CREATE TABLE IF NOT EXISTS `Admin` (
-                `AdminID` INT AUTO_INCREMENT PRIMARY KEY,
+                `AdminID` VARCHAR(50) NOT NULL PRIMARY KEY,
                 `Email` VARCHAR(255) NOT NULL UNIQUE,
                 `PasswordHash` VARCHAR(255) NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Category` (
-                `CategoryID` INT AUTO_INCREMENT PRIMARY KEY,
+                `CategoryID` VARCHAR(50) NOT NULL PRIMARY KEY,
                 `CategoryName` VARCHAR(100) NOT NULL UNIQUE,
                 `Description` TEXT
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Customer` (
-                `CustomerID` INT AUTO_INCREMENT PRIMARY KEY,
+                `CustomerID` VARCHAR(50) NOT NULL PRIMARY KEY,
                 `FullName` VARCHAR(150) NOT NULL,
                 `Email` VARCHAR(255) NOT NULL UNIQUE,
                 `PasswordHash` VARCHAR(255) NOT NULL,
@@ -92,14 +92,14 @@ class Database
                 `Address` VARCHAR(255)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Product` (
-                `ProductID` INT AUTO_INCREMENT PRIMARY KEY,
-                `CategoryID` INT NOT NULL,
+                `ProductID` VARCHAR(50) NOT NULL PRIMARY KEY,
+                `CategoryID` VARCHAR(50) NOT NULL,
                 `ProductName` VARCHAR(150) NOT NULL,
                 `BasePrice` DECIMAL(10,2) NOT NULL,
                 FOREIGN KEY (`CategoryID`) REFERENCES `Category`(`CategoryID`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Material` (
-                `MaterialID` INT AUTO_INCREMENT PRIMARY KEY,
+                `MaterialID` VARCHAR(50) NOT NULL PRIMARY KEY,
                 `MaterialName` VARCHAR(150) NOT NULL,
                 `MaterialType` VARCHAR(100),
                 `Unit` VARCHAR(20) NOT NULL,
@@ -107,10 +107,10 @@ class Database
                 `StockQuantity` DECIMAL(12,2) NOT NULL DEFAULT 0
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Voucher` (
-                `VoucherID` INT AUTO_INCREMENT PRIMARY KEY,
-                `CustomerID` INT NOT NULL,
-                `ProductID` INT NOT NULL,
-                `AdminID` INT NOT NULL,
+                `VoucherID` VARCHAR(50) NOT NULL PRIMARY KEY,
+                `CustomerID` VARCHAR(50) NOT NULL,
+                `ProductID` VARCHAR(50) NOT NULL,
+                `AdminID` VARCHAR(50) NOT NULL,
                 `Code` VARCHAR(50) NOT NULL UNIQUE,
                 `DiscountValue` DECIMAL(10,2) NOT NULL,
                 `ExpiryDate` DATE DEFAULT NULL,
@@ -122,17 +122,17 @@ class Database
                 FOREIGN KEY (`AdminID`) REFERENCES `Admin`(`AdminID`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Customer_Order` (
-                `OrderID` INT AUTO_INCREMENT PRIMARY KEY,
-                `CustomerID` INT NOT NULL,
+                `OrderID` VARCHAR(50) NOT NULL PRIMARY KEY,
+                `CustomerID` VARCHAR(50) NOT NULL,
                 `OrderDate` DATE NOT NULL,
                 `Status` VARCHAR(20) NOT NULL DEFAULT 'Pending',
                 FOREIGN KEY (`CustomerID`) REFERENCES `Customer`(`CustomerID`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Order_Item` (
-                `OrderItemID` INT AUTO_INCREMENT PRIMARY KEY,
-                `OrderID` INT NOT NULL,
-                `ProductID` INT NOT NULL,
-                `VoucherID` INT UNIQUE DEFAULT NULL,
+                `OrderItemID` VARCHAR(50) NOT NULL PRIMARY KEY,
+                `OrderID` VARCHAR(50) NOT NULL,
+                `ProductID` VARCHAR(50) NOT NULL,
+                `VoucherID` VARCHAR(50) UNIQUE DEFAULT NULL,
                 `ItemType` VARCHAR(20) NOT NULL DEFAULT 'Standard',
                 `Quantity` INT NOT NULL DEFAULT 1,
                 `UnitPrice` DECIMAL(10,2) NOT NULL,
@@ -141,17 +141,17 @@ class Database
                 FOREIGN KEY (`VoucherID`, `ProductID`) REFERENCES `Voucher`(`VoucherID`, `ProductID`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Order_Item_Material` (
-                `OrderItemID` INT NOT NULL,
-                `MaterialID` INT NOT NULL,
+                `OrderItemID` VARCHAR(50) NOT NULL,
+                `MaterialID` VARCHAR(50) NOT NULL,
                 `QuantityUsed` DECIMAL(12,2) NOT NULL,
                 PRIMARY KEY (`OrderItemID`, `MaterialID`),
                 FOREIGN KEY (`OrderItemID`) REFERENCES `Order_Item`(`OrderItemID`) ON DELETE CASCADE,
                 FOREIGN KEY (`MaterialID`) REFERENCES `Material`(`MaterialID`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Customization` (
-                `CustomizationID` INT AUTO_INCREMENT PRIMARY KEY,
-                `OrderItemID` INT NOT NULL UNIQUE,
-                `MaterialID` INT DEFAULT NULL,
+                `CustomizationID` VARCHAR(50) NOT NULL PRIMARY KEY,
+                `OrderItemID` VARCHAR(50) NOT NULL UNIQUE,
+                `MaterialID` VARCHAR(50) DEFAULT NULL,
                 `Length` DECIMAL(8,2) DEFAULT NULL,
                 `Width` DECIMAL(8,2) DEFAULT NULL,
                 `Height` DECIMAL(8,2) DEFAULT NULL,
@@ -162,15 +162,15 @@ class Database
                 FOREIGN KEY (`MaterialID`) REFERENCES `Material`(`MaterialID`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Payment` (
-                `PaymentID` INT AUTO_INCREMENT PRIMARY KEY,
-                `OrderID` INT NOT NULL,
+                `PaymentID` VARCHAR(50) NOT NULL PRIMARY KEY,
+                `OrderID` VARCHAR(50) NOT NULL,
                 `PaymentDate` DATE NOT NULL,
                 `Amount` DECIMAL(10,2) NOT NULL,
                 FOREIGN KEY (`OrderID`) REFERENCES `Customer_Order`(`OrderID`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS `Production_Task` (
-                `TaskID` INT AUTO_INCREMENT PRIMARY KEY,
-                `OrderItemID` INT NOT NULL,
+                `TaskID` VARCHAR(50) NOT NULL PRIMARY KEY,
+                `OrderItemID` VARCHAR(50) NOT NULL,
                 `StartDate` DATE DEFAULT NULL,
                 `EndDate` DATE DEFAULT NULL,
                 `TaskStatus` VARCHAR(20) NOT NULL DEFAULT 'Todo',
@@ -283,7 +283,7 @@ class Database
 
             // 1. Seed Admin
             $this->query(
-                'INSERT IGNORE INTO Admin (AdminID, Email, PasswordHash) VALUES (1, :email, :hash)',
+                "INSERT IGNORE INTO Admin (AdminID, Email, PasswordHash) VALUES ('ADM-LR-901', :email, :hash)",
                 [
                     ':email' => 'admin@lilliarowena.com',
                     ':hash'  => password_hash('MasterJoinery#01', PASSWORD_DEFAULT),
@@ -291,29 +291,33 @@ class Database
             );
 
             // 2. Seed Customer
-            $this->query(
-                'INSERT IGNORE INTO Customer (CustomerID, FullName, Email, PasswordHash, PhoneNumber, Address)
-                 VALUES (1, :name, :email, :hash, :phone, :addr)',
-                [
-                    ':name'  => 'Rowena Vance',
-                    ':email' => 'rowena.vance@vancearchitects.com',
-                    ':hash'  => password_hash('ClientPass2025!', PASSWORD_DEFAULT),
-                    ':phone' => '+1 (212) 555-0148',
-                    ':addr'  => 'Suite 400, 118 Mercer St, SoHo, New York, NY 10013',
-                ]
-            );
+            foreach (($store['customers'] ?? []) as $cust) {
+                $custId = (string) ($cust['customerId'] ?? $cust['id'] ?? 'LR-CUS-301');
+                $this->query(
+                    'INSERT IGNORE INTO Customer (CustomerID, FullName, Email, PasswordHash, PhoneNumber, Address)
+                     VALUES (:id, :name, :email, :hash, :phone, :addr)',
+                    [
+                        ':id'    => $custId,
+                        ':name'  => (string) ($cust['fullName'] ?? 'Rowena Vance'),
+                        ':email' => (string) ($cust['email'] ?? 'rowena.vance@vancearchitects.com'),
+                        ':hash'  => password_hash('ClientPass2025!', PASSWORD_DEFAULT),
+                        ':phone' => (string) ($cust['phoneNumber'] ?? '+1 (212) 555-0148'),
+                        ':addr'  => (string) ($cust['address'] ?? 'Suite 400, 118 Mercer St, SoHo, New York, NY 10013'),
+                    ]
+                );
+            }
 
             // 3. Seed Category
             $categoryMap = [
-                'living'  => 1,
-                'dining'  => 2,
-                'bedroom' => 3,
-                'office'  => 4,
-                'kitchen' => 5,
+                'living'  => 'CAT-LV-110',
+                'dining'  => 'CAT-DN-220',
+                'bedroom' => 'CAT-BD-330',
+                'office'  => 'CAT-OF-440',
+                'kitchen' => 'CAT-KT-550',
             ];
             foreach (($store['categories'] ?? []) as $cat) {
                 $catKey = strtolower((string) ($cat['id'] ?? 'living'));
-                $catId = $categoryMap[$catKey] ?? 1;
+                $catId = (string) ($cat['categoryId'] ?? $categoryMap[$catKey] ?? 'CAT-LV-110');
                 $this->query(
                     'INSERT IGNORE INTO Category (CategoryID, CategoryName, Description)
                      VALUES (:id, :name, :desc)',
@@ -326,15 +330,15 @@ class Database
             }
 
             // 4. Seed Product
-            $prodIdx = 1;
             foreach (($store['products'] ?? []) as $prod) {
                 $catKey = strtolower((string) ($prod['categoryId'] ?? 'dining'));
-                $catId = $categoryMap[$catKey] ?? 2;
+                $catId = $categoryMap[$catKey] ?? 'CAT-DN-220';
+                $prodId = strtoupper(trim((string) ($prod['productId'] ?? $prod['sku'] ?? 'LR-DN-213')));
                 $this->query(
                     'INSERT IGNORE INTO Product (ProductID, CategoryID, ProductName, BasePrice)
                      VALUES (:id, :catId, :name, :price)',
                     [
-                        ':id'    => $prodIdx++,
+                        ':id'    => $prodId,
                         ':catId' => $catId,
                         ':name'  => (string) ($prod['name'] ?? 'Furniture Piece'),
                         ':price' => (float) ($prod['price'] ?? 0),
@@ -343,13 +347,13 @@ class Database
             }
 
             // 5. Seed Material
-            $matIdx = 1;
             foreach (($store['materials'] ?? []) as $mat) {
+                $matId = strtoupper(trim((string) ($mat['materialId'] ?? $mat['code'] ?? 'MAT-WAL-01')));
                 $this->query(
                     'INSERT IGNORE INTO Material (MaterialID, MaterialName, MaterialType, Unit, UnitCost, StockQuantity)
                      VALUES (:id, :name, :type, :unit, :cost, :stock)',
                     [
-                        ':id'    => $matIdx++,
+                        ':id'    => $matId,
                         ':name'  => (string) ($mat['name'] ?? 'Material'),
                         ':type'  => (string) ($mat['materialType'] ?? 'Solid Timber'),
                         ':unit'  => (string) ($mat['unit'] ?? 'bd ft'),
@@ -385,11 +389,11 @@ class Database
         if ($this->pdo !== null) {
             try {
                 $catIdToSlug = [
-                    1 => ['id' => 'living', 'name' => 'Living Room', 'image' => 'assets/images/category_living_lounge.jpg'],
-                    2 => ['id' => 'dining', 'name' => 'Dining Room', 'image' => 'assets/images/category_dining_tables.jpg'],
-                    3 => ['id' => 'bedroom', 'name' => 'Bedroom', 'image' => 'assets/images/category_bedroom_sanctuary.jpg'],
-                    4 => ['id' => 'office', 'name' => 'Study/Work Desks', 'image' => 'assets/images/category_office_storage.jpg'],
-                    5 => ['id' => 'kitchen', 'name' => 'Kitchen', 'image' => 'assets/images/category_kitchen_atelier.jpg'],
+                    'CAT-LV-110' => ['id' => 'living', 'name' => 'Living Room', 'image' => 'assets/images/category_living_lounge.jpg'],
+                    'CAT-DN-220' => ['id' => 'dining', 'name' => 'Dining Room', 'image' => 'assets/images/category_dining_tables.jpg'],
+                    'CAT-BD-330' => ['id' => 'bedroom', 'name' => 'Bedroom', 'image' => 'assets/images/category_bedroom_sanctuary.jpg'],
+                    'CAT-OF-440' => ['id' => 'office', 'name' => 'Study/Work Desks', 'image' => 'assets/images/category_office_storage.jpg'],
+                    'CAT-KT-550' => ['id' => 'kitchen', 'name' => 'Kitchen', 'image' => 'assets/images/category_kitchen_atelier.jpg'],
                 ];
 
                 // Sync Material StockQuantity & UnitCost (including new rows added in phpMyAdmin)
@@ -415,10 +419,12 @@ class Database
                     foreach ($dbMaterials as $row) {
                         $key = strtolower(trim((string) $row['MaterialName']));
                         if (!isset($matchedMatNames[$key])) {
-                            $matId = (int) $row['MaterialID'];
+                            $matId = strtoupper(trim((string) $row['MaterialID']));
                             $existingMats[] = [
-                                'id'            => 'mat-sql-' . $matId,
-                                'code'          => sprintf('MAT-SQL-%02d', $matId),
+                                'id'            => 'mat-sql-' . strtolower($matId),
+                                'materialId'    => $matId,
+                                'code'          => $matId,
+                                'sku'           => $matId,
                                 'name'          => (string) $row['MaterialName'],
                                 'materialType'  => (string) ($row['MaterialType'] ?: 'Solid Timber'),
                                 'unit'          => (string) ($row['Unit'] ?: 'bd ft'),
@@ -454,13 +460,14 @@ class Database
                     foreach ($dbProducts as $row) {
                         $key = strtolower(trim((string) $row['ProductName']));
                         if (!isset($matchedProdNames[$key])) {
-                            $pid = (int) $row['ProductID'];
-                            $cid = (int) $row['CategoryID'];
-                            $catMeta = $catIdToSlug[$cid] ?? $catIdToSlug[2];
+                            $pid = strtoupper(trim((string) $row['ProductID']));
+                            $cid = strtoupper(trim((string) $row['CategoryID']));
+                            $catMeta = $catIdToSlug[$cid] ?? $catIdToSlug['CAT-DN-220'];
                             $basePrice = (float) $row['BasePrice'];
                             $existingProds[] = [
-                                'id'                   => 'furn-sql-' . $pid,
-                                'sku'                  => sprintf('LR-SQL-%03d', $pid),
+                                'id'                   => 'furn-sql-' . strtolower($pid),
+                                'productId'            => $pid,
+                                'sku'                  => $pid,
                                 'name'                 => (string) $row['ProductName'],
                                 'categoryId'           => $catMeta['id'],
                                 'categoryName'         => $catMeta['name'],
@@ -545,11 +552,11 @@ class Database
 
         try {
             $categoryMap = [
-                'living'  => 1,
-                'dining'  => 2,
-                'bedroom' => 3,
-                'office'  => 4,
-                'kitchen' => 5,
+                'living'  => 'CAT-LV-110',
+                'dining'  => 'CAT-DN-220',
+                'bedroom' => 'CAT-BD-330',
+                'office'  => 'CAT-OF-440',
+                'kitchen' => 'CAT-KT-550',
             ];
 
             // 1. Sync Customer Profile & Registered Customers
@@ -568,14 +575,14 @@ class Database
                                 ':name'  => $name,
                                 ':phone' => $phone ?: null,
                                 ':addr'  => $addr ?: null,
-                                ':id'    => (int) $existingCust['CustomerID'],
+                                ':id'    => (string) $existingCust['CustomerID'],
                             ]
                         );
                     }
                 }
             }
 
-            // 2. Sync Products
+            // 2. Sync Products (Explicit code ProductID like LR-LV-014)
             if (isset($data['products']) && is_array($data['products'])) {
                 foreach ($data['products'] as $prod) {
                     $name = trim((string) ($prod['name'] ?? ''));
@@ -583,23 +590,25 @@ class Database
                         continue;
                     }
                     $catKey = strtolower((string) ($prod['categoryId'] ?? 'dining'));
-                    $catId = $categoryMap[$catKey] ?? 2;
+                    $catId = $categoryMap[$catKey] ?? 'CAT-DN-220';
                     $price = max(0.0, (float) ($prod['price'] ?? 0));
+                    $prodId = strtoupper(trim((string) ($prod['productId'] ?? $prod['sku'] ?? 'LR-DN-213')));
 
-                    $existing = $this->fetch('SELECT ProductID FROM Product WHERE ProductName = :name LIMIT 1', [':name' => $name]);
+                    $existing = $this->fetch('SELECT ProductID FROM Product WHERE ProductID = :id OR ProductName = :name LIMIT 1', [':id' => $prodId, ':name' => $name]);
                     if ($existing !== null) {
                         $this->query(
                             'UPDATE Product SET CategoryID = :catId, BasePrice = :price WHERE ProductID = :id',
                             [
                                 ':catId' => $catId,
                                 ':price' => $price,
-                                ':id'    => (int) $existing['ProductID'],
+                                ':id'    => (string) $existing['ProductID'],
                             ]
                         );
                     } else {
                         $this->query(
-                            'INSERT INTO Product (CategoryID, ProductName, BasePrice) VALUES (:catId, :name, :price)',
+                            'INSERT IGNORE INTO Product (ProductID, CategoryID, ProductName, BasePrice) VALUES (:id, :catId, :name, :price)',
                             [
+                                ':id'    => $prodId,
                                 ':catId' => $catId,
                                 ':name'  => $name,
                                 ':price' => $price,
@@ -609,7 +618,7 @@ class Database
                 }
             }
 
-            // 3. Sync Materials
+            // 3. Sync Materials (Explicit code MaterialID like MAT-WAL-01)
             if (isset($data['materials']) && is_array($data['materials'])) {
                 foreach ($data['materials'] as $mat) {
                     $name = trim((string) ($mat['name'] ?? ''));
@@ -620,8 +629,9 @@ class Database
                     $unit = (string) ($mat['unit'] ?? 'bd ft');
                     $cost = max(0.0, (float) ($mat['unitCost'] ?? 0));
                     $stock = max(0.0, (float) ($mat['stockQuantity'] ?? 0));
+                    $matId = strtoupper(trim((string) ($mat['materialId'] ?? $mat['code'] ?? 'MAT-WAL-01')));
 
-                    $existing = $this->fetch('SELECT MaterialID FROM Material WHERE MaterialName = :name LIMIT 1', [':name' => $name]);
+                    $existing = $this->fetch('SELECT MaterialID FROM Material WHERE MaterialID = :id OR MaterialName = :name LIMIT 1', [':id' => $matId, ':name' => $name]);
                     if ($existing !== null) {
                         $this->query(
                             'UPDATE Material SET MaterialType = :type, Unit = :unit, UnitCost = :cost, StockQuantity = :stock WHERE MaterialID = :id',
@@ -630,14 +640,15 @@ class Database
                                 ':unit'  => $unit,
                                 ':cost'  => $cost,
                                 ':stock' => $stock,
-                                ':id'    => (int) $existing['MaterialID'],
+                                ':id'    => (string) $existing['MaterialID'],
                             ]
                         );
                     } else {
                         $this->query(
-                            'INSERT INTO Material (MaterialName, MaterialType, Unit, UnitCost, StockQuantity)
-                             VALUES (:name, :type, :unit, :cost, :stock)',
+                            'INSERT IGNORE INTO Material (MaterialID, MaterialName, MaterialType, Unit, UnitCost, StockQuantity)
+                             VALUES (:id, :name, :type, :unit, :cost, :stock)',
                             [
+                                ':id'    => $matId,
                                 ':name'  => $name,
                                 ':type'  => $type,
                                 ':unit'  => $unit,
@@ -649,7 +660,7 @@ class Database
                 }
             }
 
-            // 4. Sync Vouchers
+            // 4. Sync Vouchers (Explicit code VoucherID like VCH-LR-740)
             if (isset($data['vouchers']) && is_array($data['vouchers'])) {
                 foreach ($data['vouchers'] as $voucher) {
                     $code = strtoupper(trim((string) ($voucher['code'] ?? '')));
@@ -661,6 +672,7 @@ class Database
                         ? (string) $voucher['status']
                         : 'Active';
                     $expiry = !empty($voucher['expiryDate']) ? (string) $voucher['expiryDate'] : null;
+                    $voucherId = strtoupper(trim((string) ($voucher['voucherId'] ?? ('VCH-LR-' . (100 + (abs((int) crc32($code)) % 899))))));
 
                     $existing = $this->fetch('SELECT VoucherID FROM Voucher WHERE Code = :code LIMIT 1', [':code' => $code]);
                     if ($existing !== null) {
@@ -670,14 +682,15 @@ class Database
                                 ':val'    => $discount,
                                 ':exp'    => $expiry,
                                 ':status' => $status,
-                                ':id'     => (int) $existing['VoucherID'],
+                                ':id'     => (string) $existing['VoucherID'],
                             ]
                         );
                     } else {
                         $this->query(
-                            'INSERT IGNORE INTO Voucher (CustomerID, ProductID, AdminID, Code, DiscountValue, ExpiryDate, Status)
-                             VALUES (1, 1, 1, :code, :val, :exp, :status)',
+                            "INSERT IGNORE INTO Voucher (VoucherID, CustomerID, ProductID, AdminID, Code, DiscountValue, ExpiryDate, Status)
+                             VALUES (:vid, 'LR-CUS-301', 'LR-LV-014', 'ADM-LR-901', :code, :val, :exp, :status)",
                             [
+                                ':vid'    => $voucherId,
                                 ':code'   => $code,
                                 ':val'    => $discount,
                                 ':exp'    => $expiry,
@@ -692,8 +705,9 @@ class Database
             if (isset($data['orders']) && is_array($data['orders'])) {
                 $existingOrderCount = (int) (($this->fetch('SELECT COUNT(*) AS cnt FROM Customer_Order'))['cnt'] ?? 0);
                 if ($existingOrderCount < count($data['orders'])) {
-                    foreach (array_reverse($data['orders']) as $ordIndex => $ord) {
-                        $orderId = $ordIndex + 1;
+                    foreach (array_reverse($data['orders']) as $ord) {
+                        $ordNumStr = strtoupper(trim((string) ($ord['orderId'] ?? $ord['orderNumber'] ?? '')));
+                        $orderId = $ordNumStr !== '' ? $ordNumStr : ('ORD-2026-' . (1000 + (abs((int) crc32(uniqid())) % 8900)));
                         $existsOrd = $this->fetch('SELECT OrderID FROM Customer_Order WHERE OrderID = :id LIMIT 1', [':id' => $orderId]);
                         $sqlStatus = in_array(($ord['sqlStatus'] ?? 'Pending'), ['Pending', 'InProduction', 'Ready', 'Delivered', 'Cancelled'], true)
                             ? (string) $ord['sqlStatus']
@@ -709,8 +723,8 @@ class Database
                         }
 
                         $this->query(
-                            'INSERT INTO Customer_Order (OrderID, CustomerID, OrderDate, Status)
-                             VALUES (:id, 1, :odate, :status)',
+                            "INSERT INTO Customer_Order (OrderID, CustomerID, OrderDate, Status)
+                             VALUES (:id, 'LR-CUS-301', :odate, :status)",
                             [
                                 ':id'     => $orderId,
                                 ':odate'  => $orderDate,
@@ -721,23 +735,25 @@ class Database
                         $itemType = (($ord['itemType'] ?? 'Standard') === 'Custom') ? 'Custom' : 'Standard';
                         $qty = max(1, (int) ($ord['quantity'] ?? 1));
                         $unitPrice = max(0.0, (float) ($ord['unitPrice'] ?? $ord['totalAmount'] ?? 1000));
+                        $suffixDigits = preg_replace('/\D+/', '', substr($orderId, -4)) ?: '5841';
+                        $orderItemId = strtoupper(trim((string) ($ord['orderItemId'] ?? ('ITM-2026-' . $suffixDigits))));
 
                         $this->query(
-                            'INSERT INTO Order_Item (OrderID, ProductID, VoucherID, ItemType, Quantity, UnitPrice)
-                             VALUES (:oid, 1, NULL, :itype, :qty, :uprice)',
+                            "INSERT INTO Order_Item (OrderItemID, OrderID, ProductID, VoucherID, ItemType, Quantity, UnitPrice)
+                             VALUES (:oiid, :oid, 'LR-LV-014', NULL, :itype, :qty, :uprice)",
                             [
+                                ':oiid'   => $orderItemId,
                                 ':oid'    => $orderId,
                                 ':itype'  => $itemType,
                                 ':qty'    => $qty,
                                 ':uprice' => $unitPrice,
                             ]
                         );
-                        $orderItemId = (int) $this->pdo->lastInsertId();
 
-                        if ($orderItemId > 0) {
+                        if ($orderItemId !== '') {
                             $this->query(
-                                'INSERT IGNORE INTO Order_Item_Material (OrderItemID, MaterialID, QuantityUsed)
-                                 VALUES (:oiid, 1, :qused)',
+                                "INSERT IGNORE INTO Order_Item_Material (OrderItemID, MaterialID, QuantityUsed)
+                                 VALUES (:oiid, 'MAT-WAL-01', :qused)",
                                 [
                                     ':oiid'  => $orderItemId,
                                     ':qused' => max(1.0, (float) ($ord['materialQtyUsed'] ?? 12)),
@@ -745,10 +761,12 @@ class Database
                             );
 
                             if ($itemType === 'Custom') {
+                                $customizationId = strtoupper(trim((string) ($ord['customizationId'] ?? ('CSM-2026-' . $suffixDigits))));
                                 $this->query(
-                                    'INSERT IGNORE INTO Customization (OrderItemID, MaterialID, Length, Width, Height, ColorFinish, Notes, ExtraCost)
-                                     VALUES (:oiid, 1, :len, :wid, :hei, :finish, :notes, :extra)',
+                                    "INSERT IGNORE INTO Customization (CustomizationID, OrderItemID, MaterialID, Length, Width, Height, ColorFinish, Notes, ExtraCost)
+                                     VALUES (:cid, :oiid, 'MAT-WAL-01', :len, :wid, :hei, :finish, :notes, :extra)",
                                     [
+                                        ':cid'    => $customizationId,
                                         ':oiid'   => $orderItemId,
                                         ':len'    => max(30.0, (float) ($ord['lengthCm'] ?? 240)),
                                         ':wid'    => max(30.0, (float) ($ord['widthCm'] ?? 105)),
@@ -763,10 +781,12 @@ class Database
                             $taskStatus = in_array(($ord['taskStatus'] ?? 'Todo'), ['Todo', 'InProgress', 'Done', 'Blocked'], true)
                                 ? (string) $ord['taskStatus']
                                 : 'Todo';
+                            $taskId = strtoupper(trim((string) ($ord['taskId'] ?? ('TSK-2026-' . $suffixDigits))));
                             $this->query(
-                                'INSERT INTO Production_Task (OrderItemID, StartDate, TaskStatus)
-                                 VALUES (:oiid, :sdate, :tstatus)',
+                                'INSERT INTO Production_Task (TaskID, OrderItemID, StartDate, TaskStatus)
+                                 VALUES (:tid, :oiid, :sdate, :tstatus)',
                                 [
+                                    ':tid'     => $taskId,
                                     ':oiid'    => $orderItemId,
                                     ':sdate'   => $orderDate,
                                     ':tstatus' => $taskStatus,
@@ -775,10 +795,12 @@ class Database
                         }
 
                         $paidAmount = max(1.0, (float) ($ord['depositPaid'] ?? $ord['totalAmount'] ?? 500));
+                        $paymentId = strtoupper(trim((string) ($ord['paymentId'] ?? ('PAY-2026-' . $suffixDigits))));
                         $this->query(
-                            'INSERT INTO Payment (OrderID, PaymentDate, Amount)
-                             VALUES (:oid, :pdate, :amt)',
+                            'INSERT INTO Payment (PaymentID, OrderID, PaymentDate, Amount)
+                             VALUES (:pid, :oid, :pdate, :amt)',
                             [
+                                ':pid'   => $paymentId,
                                 ':oid'   => $orderId,
                                 ':pdate' => $orderDate,
                                 ':amt'   => $paidAmount,
@@ -861,6 +883,7 @@ class Database
             'categories' => [
                 [
                     'id' => 'living',
+                    'categoryId' => 'CAT-LV-110',
                     'name' => 'Living Room',
                     'code' => 'CAT-01 / LIVING',
                     'tagline' => 'Sculpted Bouclé Sofas, Solid Oak Lounge Chairs & Travertine Plinths',
@@ -873,6 +896,7 @@ class Database
                 ],
                 [
                     'id' => 'dining',
+                    'categoryId' => 'CAT-DN-220',
                     'name' => 'Dining Room',
                     'code' => 'CAT-02 / DINING',
                     'tagline' => 'Monolithic Black Walnut Slab Tables & Woven Danish Cord Seating',
@@ -885,6 +909,7 @@ class Database
                 ],
                 [
                     'id' => 'bedroom',
+                    'categoryId' => 'CAT-BD-330',
                     'name' => 'Bedroom',
                     'code' => 'CAT-03 / BEDROOM',
                     'tagline' => 'Tailored Belgian Linen Platform Beds & Cantilevered Ash Nightstands',
@@ -897,6 +922,7 @@ class Database
                 ],
                 [
                     'id' => 'office',
+                    'categoryId' => 'CAT-OF-440',
                     'name' => 'Study/Work Desks',
                     'code' => 'CAT-04 / STUDY',
                     'tagline' => 'Fluted Walnut Sideboards, Architect Work Desks & Shelving Systems',
@@ -909,6 +935,7 @@ class Database
                 ],
                 [
                     'id' => 'kitchen',
+                    'categoryId' => 'CAT-KT-550',
                     'name' => 'Kitchen',
                     'code' => 'CAT-05 / KITCHEN',
                     'tagline' => 'Monolithic Walnut Kitchen Islands, Travertine Prep Blocks & Counter Stools',
@@ -923,6 +950,7 @@ class Database
             'products' => [
                 [
                     'id' => 'furn-lv-01',
+                    'productId' => 'LR-LV-014',
                     'sku' => 'LR-LV-014',
                     'name' => 'Rowena Curved Bouclé Lounge Sofa',
                     'categoryId' => 'living',
@@ -958,6 +986,7 @@ class Database
                 ],
                 [
                     'id' => 'furn-dn-01',
+                    'productId' => 'LR-DN-108',
                     'sku' => 'LR-DN-108',
                     'name' => 'Lillia Monolith Solid Walnut Dining Table',
                     'categoryId' => 'dining',
@@ -993,6 +1022,7 @@ class Database
                 ],
                 [
                     'id' => 'furn-bd-01',
+                    'productId' => 'LR-BD-204',
                     'sku' => 'LR-BD-204',
                     'name' => 'Serene Belgian Linen Platform Bed (King)',
                     'categoryId' => 'bedroom',
@@ -1026,6 +1056,7 @@ class Database
                 ],
                 [
                     'id' => 'furn-of-02',
+                    'productId' => 'LR-OF-315',
                     'sku' => 'LR-OF-315',
                     'name' => 'Quarter-Sawn Oak Architect Work Desk',
                     'categoryId' => 'office',
@@ -1059,6 +1090,7 @@ class Database
                 ],
                 [
                     'id' => 'furn-of-01',
+                    'productId' => 'LR-OF-302',
                     'sku' => 'LR-OF-302',
                     'name' => 'Mercier Fluted Walnut Sideboard Credenza',
                     'categoryId' => 'office',
@@ -1091,6 +1123,7 @@ class Database
                 ],
                 [
                     'id' => 'furn-lv-02',
+                    'productId' => 'LR-LV-029',
                     'sku' => 'LR-LV-029',
                     'name' => 'Cavana Sculpted White Oak Lounge Chair',
                     'categoryId' => 'living',
@@ -1123,6 +1156,7 @@ class Database
                 ],
                 [
                     'id' => 'furn-lv-03',
+                    'productId' => 'LR-LV-042',
                     'sku' => 'LR-LV-042',
                     'name' => 'Verona Honed Travertine Plinth Table',
                     'categoryId' => 'living',
@@ -1155,6 +1189,7 @@ class Database
                 ],
                 [
                     'id' => 'furn-dn-02',
+                    'productId' => 'LR-DN-115',
                     'sku' => 'LR-DN-115',
                     'name' => 'Solenne Woven Cord Dining Chair (Set of 2)',
                     'categoryId' => 'dining',
@@ -1187,6 +1222,7 @@ class Database
                 ],
                 [
                     'id' => 'furn-bd-02',
+                    'productId' => 'LR-BD-219',
                     'sku' => 'LR-BD-219',
                     'name' => 'Cantilevered Ash Bedside Nightstand (Pair)',
                     'categoryId' => 'bedroom',
@@ -1219,6 +1255,7 @@ class Database
                 ],
                 [
                     'id' => 'furn-kt-01',
+                    'productId' => 'LR-KT-401',
                     'sku' => 'LR-KT-401',
                     'name' => 'Valen Travertine & Walnut Kitchen Island',
                     'categoryId' => 'kitchen',
@@ -1251,6 +1288,7 @@ class Database
                 ],
                 [
                     'id' => 'furn-kt-02',
+                    'productId' => 'LR-KT-412',
                     'sku' => 'LR-KT-412',
                     'name' => 'Soren Sculpted Oak Counter Stools (Set of 2)',
                     'categoryId' => 'kitchen',
@@ -1285,6 +1323,7 @@ class Database
             'materials' => [
                 [
                     'id' => 'mat-101',
+                    'materialId' => 'MAT-WAL-01',
                     'code' => 'MAT-WAL-01',
                     'name' => 'FAS American Black Walnut Slabs',
                     'materialType' => 'Solid Timber',
@@ -1296,6 +1335,7 @@ class Database
                 ],
                 [
                     'id' => 'mat-102',
+                    'materialId' => 'MAT-OAK-02',
                     'code' => 'MAT-OAK-02',
                     'name' => 'Quarter-Sawn European White Oak',
                     'materialType' => 'Solid Timber',
@@ -1307,6 +1347,7 @@ class Database
                 ],
                 [
                     'id' => 'mat-103',
+                    'materialId' => 'MAT-ASH-03',
                     'code' => 'MAT-ASH-03',
                     'name' => 'Kiln-Dried European Ash Timber',
                     'materialType' => 'Solid Timber',
@@ -1318,6 +1359,7 @@ class Database
                 ],
                 [
                     'id' => 'mat-104',
+                    'materialId' => 'MAT-BCL-04',
                     'code' => 'MAT-BCL-04',
                     'name' => 'Heavyweight Belgian Wool Bouclé',
                     'materialType' => 'Upholstery Textile',
@@ -1329,6 +1371,7 @@ class Database
                 ],
                 [
                     'id' => 'mat-105',
+                    'materialId' => 'MAT-LIN-05',
                     'code' => 'MAT-LIN-05',
                     'name' => 'Unbleached Belgian Flax Linen',
                     'materialType' => 'Upholstery Textile',
@@ -1340,6 +1383,7 @@ class Database
                 ],
                 [
                     'id' => 'mat-106',
+                    'materialId' => 'MAT-TRV-06',
                     'code' => 'MAT-TRV-06',
                     'name' => 'Honed Roman Travertine Blocks',
                     'materialType' => 'Architectural Stone',
@@ -1351,6 +1395,7 @@ class Database
                 ],
                 [
                     'id' => 'mat-107',
+                    'materialId' => 'MAT-BRS-07',
                     'code' => 'MAT-BRS-07',
                     'name' => 'Solid Aged Brass Hardware & Butterfly Keys',
                     'materialType' => 'Hardware & Joinery',
@@ -1362,6 +1407,7 @@ class Database
                 ],
                 [
                     'id' => 'mat-108',
+                    'materialId' => 'MAT-CRD-08',
                     'code' => 'MAT-CRD-08',
                     'name' => 'Danish Waxed Paper Cord & Cold-Pressed Linseed Oil',
                     'materialType' => 'Cord & Finishes',
@@ -1375,6 +1421,7 @@ class Database
             'vouchers' => [
                 [
                     'id' => 'vch-101',
+                    'voucherId' => 'VCH-LR-740',
                     'code' => 'VCH-ROWENA-SOFA400',
                     'customerEmail' => 'rowena.vance@vancearchitects.com',
                     'customerName' => 'Rowena Vance',
@@ -1389,6 +1436,7 @@ class Database
                 ],
                 [
                     'id' => 'vch-102',
+                    'voucherId' => 'VCH-LR-735',
                     'code' => 'VCH-ROWENA-WALNUT350',
                     'customerEmail' => 'rowena.vance@vancearchitects.com',
                     'customerName' => 'Rowena Vance',
@@ -1403,6 +1451,7 @@ class Database
                 ],
                 [
                     'id' => 'vch-103',
+                    'voucherId' => 'VCH-LR-725',
                     'code' => 'VCH-JULIAN-BED250',
                     'customerEmail' => 'j.mercier@mercierstudio.co',
                     'customerName' => 'Julian Mercier',
@@ -1419,6 +1468,11 @@ class Database
             'orders' => [
                 [
                     'id' => 'ord-101',
+                    'orderId' => 'ORD-2026-8841',
+                    'orderItemId' => 'ITM-2026-5841',
+                    'customizationId' => 'CSM-2026-6841',
+                    'taskId' => 'TSK-2026-2841',
+                    'paymentId' => 'PAY-2026-9841',
                     'orderNumber' => 'ORD-2026-8841',
                     'clientName' => 'Rowena Vance',
                     'clientEmail' => 'rowena.vance@vancearchitects.com',
@@ -1455,6 +1509,10 @@ class Database
                 ],
                 [
                     'id' => 'ord-102',
+                    'orderId' => 'ORD-2026-8834',
+                    'orderItemId' => 'ITM-2026-5834',
+                    'taskId' => 'TSK-2026-2834',
+                    'paymentId' => 'PAY-2026-9834',
                     'orderNumber' => 'ORD-2026-8834',
                     'clientName' => 'Rowena Vance',
                     'clientEmail' => 'rowena.vance@vancearchitects.com',
@@ -1491,6 +1549,10 @@ class Database
                 ],
                 [
                     'id' => 'ord-103',
+                    'orderId' => 'ORD-2026-8829',
+                    'orderItemId' => 'ITM-2026-5829',
+                    'taskId' => 'TSK-2026-2829',
+                    'paymentId' => 'PAY-2026-9829',
                     'orderNumber' => 'ORD-2026-8829',
                     'clientName' => 'Julian Mercier',
                     'clientEmail' => 'j.mercier@mercierstudio.co',
@@ -1527,6 +1589,10 @@ class Database
                 ],
                 [
                     'id' => 'ord-104',
+                    'orderId' => 'ORD-2026-8815',
+                    'orderItemId' => 'ITM-2026-5815',
+                    'taskId' => 'TSK-2026-2815',
+                    'paymentId' => 'PAY-2026-9815',
                     'orderNumber' => 'ORD-2026-8815',
                     'clientName' => 'Elena Rostova',
                     'clientEmail' => 'elena@rostovainteriors.com',
@@ -1563,6 +1629,9 @@ class Database
                 ],
                 [
                     'id' => 'ord-105',
+                    'orderId' => 'ORD-2026-8850',
+                    'orderItemId' => 'ITM-2026-5850',
+                    'taskId' => 'TSK-2026-2850',
                     'orderNumber' => 'ORD-2026-8850',
                     'clientName' => 'Marcus Sterling',
                     'clientEmail' => 'm.sterling@sterlingcapital.io',
@@ -1700,7 +1769,8 @@ class Database
             ],
             'customers' => [
                 [
-                    'id' => 1,
+                    'id' => 'LR-CUS-301',
+                    'customerId' => 'LR-CUS-301',
                     'role' => 'Customer',
                     'fullName' => 'Rowena Vance',
                     'email' => 'rowena.vance@vancearchitects.com',
@@ -1708,7 +1778,8 @@ class Database
                     'address' => 'Suite 400, 118 Mercer St, SoHo, NY',
                 ],
                 [
-                    'id' => 2,
+                    'id' => 'LR-CUS-302',
+                    'customerId' => 'LR-CUS-302',
                     'role' => 'Customer',
                     'fullName' => 'Julian Mercier',
                     'email' => 'j.mercier@mercierstudio.co',
@@ -1716,7 +1787,8 @@ class Database
                     'address' => '742 Evergreen Terrace, Pacific Heights, SF',
                 ],
                 [
-                    'id' => 3,
+                    'id' => 'LR-CUS-304',
+                    'customerId' => 'LR-CUS-304',
                     'role' => 'Customer',
                     'fullName' => 'Elena Rostova',
                     'email' => 'elena@rostovainteriors.com',
@@ -1724,7 +1796,8 @@ class Database
                     'address' => '29A Kensington Park Rd, Notting Hill',
                 ],
                 [
-                    'id' => 4,
+                    'id' => 'LR-CUS-308',
+                    'customerId' => 'LR-CUS-308',
                     'role' => 'Customer',
                     'fullName' => 'Marcus Sterling',
                     'email' => 'm.sterling@sterlingcapital.io',

@@ -23,7 +23,9 @@ import {
   filterInventoryMaterials,
   findMatchingColorVariant,
   formatCustomerProductDisplay,
+  formatSimplifiedProductCardData,
   formatVoucherBenefitLabel,
+  generateOwnEntityId,
   getColorFilterCounts,
   getCompletedTransactionsForCustomer,
   getMaterialCategories,
@@ -710,6 +712,77 @@ describe('Pure JavaScript & Server Store Logic Tests', () => {
     assert.equal(afterCompletedTx[0].piece, 'Lillia Solid Walnut Dining Table (Custom Spec)');
     assert.equal(afterCompletedTx[0].amount, 4256);
     assert.equal(afterCompletedTx[0].status, 'Completed');
+  });
+
+  it('formats simplified product card data without finish/color swatches or SKUs while preserving full variation options for Product Details', () => {
+    const sofa = INITIAL_FURNITURE_ITEMS[0]; // Rowena Curved Bouclé Lounge Sofa
+    const cardData = formatSimplifiedProductCardData(sofa);
+
+    assert.equal(cardData.id, sofa.id);
+    assert.equal(cardData.name, 'Rowena Curved Bouclé Lounge Sofa');
+    assert.equal(cardData.categoryName, 'Living Room');
+    assert.equal(cardData.hasDiscount, true);
+    assert.equal(cardData.originalPrice, 4850);
+    assert.equal(cardData.sellingPrice, 4365);
+    assert.equal(cardData.discountPercent, 10);
+    assert.ok(cardData.description.length > 0);
+    assert.equal(cardData.availabilityLabel, 'In Stock');
+    assert.equal(cardData.dimensions, '245cm W × 104cm D × 74cm H');
+    assert.equal(cardData.shippingTimeLabel, 'Ships in 4 weeks');
+    assert.equal(cardData.ctaLabel, 'View Product');
+
+    // Simplified card payload must NOT contain finish/color swatches, priceDelta, or SKU
+    assert.equal('colorVariants' in cardData, false);
+    assert.equal('selectedFinish' in cardData, false);
+    assert.equal('priceDelta' in cardData, false);
+    assert.equal('sku' in cardData, false);
+
+    // Full Product Details payload continues to preserve finish/color variations and pricing
+    const detailsData = formatCustomerProductDisplay(sofa, sofa.colorVariants[1].name);
+    assert.ok(Array.isArray(detailsData.colorVariants));
+    assert.ok(detailsData.colorVariants.length >= 2);
+    assert.equal(detailsData.selectedFinish, sofa.colorVariants[1].name);
+  });
+
+  it('assigns explicit non-incrementing own code IDs (e.g. ProductID LR-LV-213, OrderID ORD-2026-xxxx, MaterialID MAT-xxx-xx, CustomerID LR-CUS-xxx, VoucherID VCH-LR-xxx) and avoids AUTO_INCREMENT in SQL', () => {
+    const prodExplicit = buildProductRecord({ name: 'Lounge Chair', sku: 'LR-LV-213', categoryId: 'living', price: 2500 });
+    const prodAuto = buildProductRecord({ name: 'Walnut Dining Table', categoryId: 'dining', price: 2900 });
+    assert.equal(prodExplicit.productId, 'LR-LV-213');
+    assert.equal(prodExplicit.sku, 'LR-LV-213');
+    assert.match(String(prodAuto.productId), /^LR-DN-\d{3}$/);
+    assert.equal(prodAuto.productId, prodAuto.sku);
+    assert.equal(/^\d+$/.test(String(prodAuto.productId)), false);
+
+    const matA = buildMaterialRecord({ name: 'Smoked Ash', unit: 'bd ft', unitCost: 30, stockQuantity: 40 });
+    assert.match(String(matA.materialId), /^MAT-[A-Z]{3}-\d{2}$/);
+    assert.equal(/^\d+$/.test(String(matA.materialId)), false);
+
+    const orderRes = verifyAndCreateOrder({
+      catalog: INITIAL_FURNITURE_ITEMS,
+      vouchers: INITIAL_VOUCHERS,
+      customerProfile: {
+        name: 'Rowena Vance',
+        email: 'rowena.vance@vancearchitects.com',
+        address: 'Suite 400, 118 Mercer St',
+        city: 'New York, NY',
+      },
+      cartItems: [{ product: INITIAL_FURNITURE_ITEMS[0], finish: INITIAL_FURNITURE_ITEMS[0].defaultFinish, quantity: 1 }],
+    });
+    assert.equal(orderRes.ok, true);
+    assert.match(String(orderRes.order.orderId), /^ORD-2026-\d{4}$/);
+    assert.match(String(orderRes.order.orderItemId), /^ITM-2026-\d{4}$/);
+    assert.match(String(orderRes.order.taskId), /^TSK-2026-\d{4}$/);
+    assert.match(String(orderRes.order.paymentId), /^PAY-2026-\d{4}$/);
+
+    const vchId = generateOwnEntityId('voucher', 'VCH-TEST').codeId;
+    assert.match(String(vchId), /^VCH-LR-\d{3}$/);
+
+    const custId = generateOwnEntityId('customer', 'client@example.com').codeId;
+    assert.match(String(custId), /^LR-CUS-\d{3}$/);
+
+    const sqlContent = fs.readFileSync(path.join(process.cwd(), 'database', 'furniture.sql'), 'utf8');
+    assert.equal(/AUTO_INCREMENT/i.test(sqlContent), false);
+    assert.match(sqlContent, /'LR-LV-014'/);
   });
 });
 

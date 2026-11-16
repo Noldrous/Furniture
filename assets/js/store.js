@@ -28,6 +28,78 @@ const DEFAULT_CATEGORY_IMAGES = {
   kitchen: 'assets/images/category_dining_tables.jpg',
 };
 
+const CATEGORY_CODE_PREFIXES = {
+  living: 'LV',
+  dining: 'DN',
+  bedroom: 'BD',
+  office: 'OF',
+  kitchen: 'KT',
+};
+
+export function generateOwnEntityId(entityType = 'entity', seed = '', categoryId = '') {
+  const cleanSeed = String(seed || '').trim();
+  const cleanCategory = String(categoryId || '').trim().toLowerCase();
+  let hash = 2166136261;
+  const source = `${entityType}:${cleanSeed}:${cleanCategory}:${Date.now()}:${Math.random()}`;
+  for (let i = 0; i < source.length; i += 1) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const unsigned = Math.abs(hash >>> 0);
+  const ranges = {
+    product: [100, 999],
+    order: [8100, 9899],
+    material: [10, 99],
+    customer: [300, 999],
+    voucher: [700, 999],
+    orderItem: [5100, 5999],
+    customization: [6100, 6999],
+    task: [2100, 2999],
+    payment: [9100, 9999],
+  };
+  const [minVal, maxVal] = ranges[entityType] || [100, 999];
+  const numericId = minVal + (unsigned % (maxVal - minVal + 1));
+
+  let codeId = `${entityType.toUpperCase()}-${numericId}`;
+  if (entityType === 'product') {
+    const matchedPrefix =
+      CATEGORY_CODE_PREFIXES[cleanCategory] ||
+      (cleanSeed.match(/^LR-([A-Z]{2,3})-/i)?.[1] || 'LV').toUpperCase();
+    codeId = `LR-${matchedPrefix}-${String(numericId).padStart(3, '0')}`;
+  } else if (entityType === 'order') {
+    codeId = `ORD-2026-${numericId}`;
+  } else if (entityType === 'material') {
+    const letters =
+      cleanSeed
+        .replace(/^MAT-/i, '')
+        .replace(/[^a-zA-Z]/g, '')
+        .toUpperCase()
+        .slice(0, 3) || 'TIM';
+    codeId = `MAT-${letters.padEnd(3, 'X')}-${String(numericId).padStart(2, '0')}`;
+  } else if (entityType === 'customer') {
+    codeId = `LR-CUS-${numericId}`;
+  } else if (entityType === 'voucher') {
+    codeId = `VCH-LR-${numericId}`;
+  } else if (entityType === 'orderItem') {
+    codeId = `ITM-2026-${numericId}`;
+  } else if (entityType === 'customization') {
+    codeId = `CSM-2026-${numericId}`;
+  } else if (entityType === 'task') {
+    codeId = `TSK-2026-${numericId}`;
+  } else if (entityType === 'payment') {
+    codeId = `PAY-2026-${numericId}`;
+  }
+
+  return {
+    numericId,
+    codeId,
+  };
+}
+
+export function generateProductCode(categoryId = 'living', seed = '') {
+  return generateOwnEntityId('product', seed, categoryId).codeId;
+}
+
 export function buildProductRecord(input, existingProduct = null) {
   const rawType = String(
     input?.productType ??
@@ -110,10 +182,31 @@ export function buildProductRecord(input, existingProduct = null) {
   const rawMinStock = input?.minStockLevel ?? existingProduct?.minStockLevel ?? 2;
   const minStockLevel = Math.max(0, Math.floor(Number.isFinite(Number(rawMinStock)) ? Number(rawMinStock) : 2));
 
+  const rawSkuInput = String(
+    input?.sku ??
+      input?.productId ??
+      existingProduct?.productId ??
+      existingProduct?.sku ??
+      ''
+  )
+    .trim()
+    .toUpperCase();
+  const hasExplicitProductCode =
+    rawSkuInput.length >= 4 &&
+    rawSkuInput !== 'LR-NEW-001' &&
+    !/^\d+$/.test(rawSkuInput);
+  const resolvedProductId = hasExplicitProductCode
+    ? rawSkuInput
+    : generateOwnEntityId('product', input?.name || '', categoryId).codeId;
+
   return {
     ...(existingProduct || {}),
-    id: existingProduct?.id || input?.id || `furn-${isCustomized ? 'cust' : 'std'}-${Date.now()}`,
-    sku: String(input?.sku ?? existingProduct?.sku ?? 'LR-NEW-001').trim().toUpperCase(),
+    id:
+      existingProduct?.id ||
+      input?.id ||
+      `furn-${isCustomized ? 'cust' : 'std'}-${resolvedProductId.toLowerCase()}`,
+    productId: resolvedProductId,
+    sku: resolvedProductId,
     name: String(input?.name ?? existingProduct?.name ?? 'Untitled Piece').trim(),
     categoryId,
     categoryName,
@@ -572,10 +665,18 @@ export function verifyAndCreateOrder({
   const pricing = calculateOrderPricing(normalizedLines, validatedVoucher, catalog);
   const firstEntry = normalizedLines[0];
   const totalQty = normalizedLines.reduce((sum, l) => sum + l.quantity, 0);
-  const ordNum = `ORD-2026-${Math.floor(8900 + Math.random() * 999)}`;
+  const generatedOrderId = generateOwnEntityId('order', activeEmail).codeId;
+  const generatedOrderItemId = generateOwnEntityId('orderItem', `${generatedOrderId}-${firstEntry.productId}`).codeId;
+  const generatedTaskId = generateOwnEntityId('task', `${generatedOrderId}`).codeId;
+  const generatedPaymentId = generateOwnEntityId('payment', `${generatedOrderId}`).codeId;
+  const ordNum = generatedOrderId;
 
   const orderRecord = {
-    id: `ord-${Date.now()}`,
+    id: `ord-${ordNum.toLowerCase()}`,
+    orderId: ordNum,
+    orderItemId: generatedOrderItemId,
+    taskId: generatedTaskId,
+    paymentId: generatedPaymentId,
     orderNumber: ordNum,
     clientName: customerProfile?.name || sessionUser?.name || 'Rowena Vance',
     clientEmail: activeEmail,
@@ -698,13 +799,23 @@ export function createCustomOrderRequest({
   const totalAmount = rawSubtotal + deliveryFee;
   const depositPaid = Math.round(totalAmount * 0.5);
 
-  const ordNum = `ORD-2026-${Math.floor(8900 + Math.random() * 999)}`;
   const activeEmail =
     customerProfile?.email || sessionUser?.email || 'rowena.vance@vancearchitects.com';
+  const generatedOrderId = generateOwnEntityId('order', `${activeEmail}-${product.id}`).codeId;
+  const generatedOrderItemId = generateOwnEntityId('orderItem', `${generatedOrderId}-${product.id}`).codeId;
+  const generatedCustomizationId = generateOwnEntityId('customization', `${generatedOrderId}`).codeId;
+  const generatedTaskId = generateOwnEntityId('task', `${generatedOrderId}`).codeId;
+  const generatedPaymentId = generateOwnEntityId('payment', `${generatedOrderId}`).codeId;
+  const ordNum = generatedOrderId;
   const customDimensions = `${Math.round(lengthCm)}cm L × ${Math.round(widthCm)}cm W × ${Math.round(heightCm)}cm H`;
 
   const orderRecord = {
-    id: `ord-cust-${Date.now()}`,
+    id: `ord-cust-${ordNum.toLowerCase()}`,
+    orderId: ordNum,
+    orderItemId: generatedOrderItemId,
+    customizationId: generatedCustomizationId,
+    taskId: generatedTaskId,
+    paymentId: generatedPaymentId,
     orderNumber: ordNum,
     clientName: customerProfile?.name || sessionUser?.name || 'Rowena Vance',
     clientEmail: activeEmail,
@@ -1124,21 +1235,29 @@ export function buildMaterialRecord(input, existingMaterial = null) {
   const minStockLevel = Math.max(0, Number(input?.minStockLevel ?? existingMaterial?.minStockLevel ?? 10));
   const unitCost = Math.max(0, Number(input?.unitCost ?? existingMaterial?.unitCost ?? 25));
 
-  const code = String(
+  const rawMatCode = String(
     input?.code ??
       input?.sku ??
+      input?.materialId ??
+      existingMaterial?.materialId ??
       existingMaterial?.code ??
       existingMaterial?.sku ??
-      `MAT-${Math.floor(100 + Math.random() * 899)}`
+      ''
   )
     .trim()
     .toUpperCase();
 
+  const hasExplicitMatCode = rawMatCode.length >= 4 && !/^\d+$/.test(rawMatCode);
+  const resolvedMaterialId = hasExplicitMatCode
+    ? rawMatCode
+    : generateOwnEntityId('material', input?.name ?? input?.materialName ?? 'TIM').codeId;
+
   return {
     ...(existingMaterial || {}),
-    id: existingMaterial?.id || input?.id || `mat-${Date.now()}`,
-    code,
-    sku: code,
+    id: existingMaterial?.id || input?.id || `mat-${resolvedMaterialId.toLowerCase()}`,
+    materialId: resolvedMaterialId,
+    code: resolvedMaterialId,
+    sku: resolvedMaterialId,
     name: String(input?.name ?? input?.materialName ?? existingMaterial?.name ?? 'Raw Material').trim(),
     materialType: String(input?.materialType ?? existingMaterial?.materialType ?? 'Solid Timber').trim(),
     unit: String(input?.unit ?? existingMaterial?.unit ?? 'bd ft').trim(),
@@ -1326,11 +1445,26 @@ export function paginateItems(items = [], currentPage = 1, pageSize = 5) {
 export function computeCustomerDirectory(orders = [], customers = [], customerProfile = null) {
   const byEmail = new Map();
 
+  const deriveCustomerOwnId = (emailStr, explicitId = null) => {
+    const cleanExplicit = String(explicitId ?? '').trim().toUpperCase();
+    if (cleanExplicit && cleanExplicit !== 'CUST-PROFILE' && !/^\d+$/.test(cleanExplicit)) {
+      return cleanExplicit;
+    }
+    let hash = 0;
+    const clean = String(emailStr || '').trim().toLowerCase();
+    for (let i = 0; i < clean.length; i += 1) {
+      hash = (hash * 31 + clean.charCodeAt(i)) % 699;
+    }
+    return `LR-CUS-${300 + Math.abs(hash)}`;
+  };
+
   const upsert = (entry) => {
     const email = String(entry?.email || '').trim().toLowerCase();
     if (!email || email === 'admin@lilliarowena.com' || entry?.role === 'admin') return;
+    const resolvedCustId = deriveCustomerOwnId(email, entry?.customerId ?? entry?.id);
     const existing = byEmail.get(email) || {
-      id: entry.id || `cust-${byEmail.size + 101}`,
+      id: entry.id && String(entry.id) !== 'cust-profile' ? entry.id : `cust-${resolvedCustId}`,
+      customerId: resolvedCustId,
       name: entry.name || entry.fullName || 'Client',
       email: entry.email.trim(),
       phone: entry.phone || entry.phoneNumber || '+1 (212) 555-0140',
@@ -1343,6 +1477,7 @@ export function computeCustomerDirectory(orders = [], customers = [], customerPr
     };
     byEmail.set(email, {
       ...existing,
+      customerId: existing.customerId || resolvedCustId,
       name: entry.name || entry.fullName || existing.name,
       phone: entry.phone || entry.phoneNumber || existing.phone,
       address: entry.address || existing.address,
@@ -1358,7 +1493,7 @@ export function computeCustomerDirectory(orders = [], customers = [], customerPr
     customerProfile.role !== 'admin'
   ) {
     upsert({
-      id: 'cust-profile',
+      id: customerProfile.customerId || customerProfile.id || null,
       name: customerProfile.name,
       email: customerProfile.email,
       phone: customerProfile.phone,
@@ -1374,8 +1509,10 @@ export function computeCustomerDirectory(orders = [], customers = [], customerPr
     const email = String(ord?.clientEmail || '').trim().toLowerCase();
     if (!email || email === 'admin@lilliarowena.com') return;
     if (!byEmail.has(email)) {
+      const custOwnId = deriveCustomerOwnId(email);
       upsert({
-        id: `cust-${byEmail.size + 101}`,
+        id: `cust-${custOwnId}`,
+        customerId: custOwnId,
         name: ord.clientName || 'Showroom Client',
         email: ord.clientEmail,
         phone: '+1 (212) 555-0192',
@@ -1919,6 +2056,29 @@ export function formatCustomerProductDisplay(item, selectedFinishName) {
     isOutOfStock,
     isLowStock,
     leadTimeWeeks,
+  };
+}
+
+export function formatSimplifiedProductCardData(item, selectedFinishName) {
+  const display = formatCustomerProductDisplay(item, selectedFinishName);
+  return {
+    id: String(item?.id || '').trim(),
+    image: display.image,
+    name: display.name,
+    categoryName: display.categoryName,
+    originalPrice: display.hasDiscount ? display.variantBasePrice : null,
+    sellingPrice: display.effectivePrice,
+    discountPercent: display.discountPercent,
+    hasDiscount: display.hasDiscount,
+    description: display.description,
+    availabilityLabel: display.availabilityLabel,
+    availableStock: display.availableStock,
+    isOutOfStock: display.isOutOfStock,
+    isLowStock: display.isLowStock,
+    dimensions: display.dimensions,
+    leadTimeWeeks: display.leadTimeWeeks,
+    shippingTimeLabel: `Ships in ${display.leadTimeWeeks} ${display.leadTimeWeeks === 1 ? 'week' : 'weeks'}`,
+    ctaLabel: 'View Product',
   };
 }
 

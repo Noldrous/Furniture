@@ -311,8 +311,10 @@ function handleApiRequest(req, res, parsedUrl) {
               }
               const phoneVal = String(payload.phoneNumber || '').trim();
               const addressVal = String(payload.address || '').trim();
+              const generatedCustomerId = `LR-CUS-${Math.floor(320 + Math.random() * 679)}`;
               const customerRecord = {
-                id: customers.length + 10,
+                id: generatedCustomerId,
+                customerId: generatedCustomerId,
                 role: 'Customer',
                 fullName,
                 name: fullName,
